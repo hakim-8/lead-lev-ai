@@ -1,8 +1,8 @@
 "use client";
 
-import React from 'react';
-import Link from 'next/link';
-import { FaRobot } from 'react-icons/fa';
+import React from "react";
+import Link from "next/link";
+import { FaRobot } from "react-icons/fa";
 
 export default function Navbar() {
   return (
@@ -16,18 +16,39 @@ export default function Navbar() {
             Lead Lev AI
           </span>
         </Link>
-        
+
         <div className="hidden md:flex items-center gap-8">
-          <Link href="#features" className="text-sm font-semibold text-slate-600 hover:text-indigo-600 transition">Features</Link>
-          <Link href="#how-it-works" className="text-sm font-semibold text-slate-600 hover:text-indigo-600 transition">How it Works</Link>
-          <Link href="#pricing" className="text-sm font-semibold text-slate-600 hover:text-indigo-600 transition">Pricing</Link>
+          <Link
+            href="#features"
+            className="text-sm font-semibold text-slate-600 hover:text-indigo-600 transition"
+          >
+            Features
+          </Link>
+          <Link
+            href="#how-it-works"
+            className="text-sm font-semibold text-slate-600 hover:text-indigo-600 transition"
+          >
+            How it Works
+          </Link>
+          <Link
+            href="#pricing"
+            className="text-sm font-semibold text-slate-600 hover:text-indigo-600 transition"
+          >
+            Pricing
+          </Link>
         </div>
 
         <div className="flex items-center gap-4">
-          <Link href="#" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition">
+          <Link
+            href="/sign-in"
+            className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition"
+          >
             Sign In
           </Link>
-          <Link href="#" className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-full shadow-md shadow-indigo-200 transition-all transform hover:scale-105 active:scale-95">
+          <Link
+            href="/sign-up"
+            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-full shadow-md shadow-indigo-200 transition-all transform hover:scale-105 active:scale-95"
+          >
             Sign Up
           </Link>
         </div>

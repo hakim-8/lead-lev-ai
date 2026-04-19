@@ -19,6 +19,7 @@ import {
   FaCopy,
   FaCheck,
 } from "react-icons/fa";
+import { MdEmail } from "react-icons/md";
 import { supabase } from "../../lib/supabase";
 
 const ROLES = [
@@ -34,6 +35,7 @@ const SEARCH_MODES = [
   { id: "company", label: "Company Emails", icon: FaBuilding },
   { id: "person", label: "Find Person", icon: FaUser },
   { id: "decision_maker", label: "Decision Makers", icon: FaIdBadge },
+  { id: "single_email", label: "Single Email", icon: MdEmail },
 ];
 
 const ITEMS_PER_PAGE = 6;
@@ -46,8 +48,31 @@ export default function EmailFinderPage() {
   const [mode, setMode] = useState("company");
   const [domain, setDomain] = useState("");
   const [fullName, setFullName] = useState("");
+  const [singleEmail, setSingleEmail] = useState("");
   const [role, setRole] = useState("ceo");
   const [isSearching, setIsSearching] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
+
+  const LOADING_STEPS = [
+    "AI is searching databases...",
+    "Checking SMTP records...",
+    "Cross-checking with LinkedIn...",
+    "Verifying domain reputation...",
+    "Finalizing verified results...",
+  ];
+
+  // Lifecycle for loading messages
+  useEffect(() => {
+    let interval;
+    if (isSearching) {
+      interval = setInterval(() => {
+        setLoadingStep((prev) => (prev + 1) % LOADING_STEPS.length);
+      }, 2500);
+    } else {
+      setLoadingStep(0);
+    }
+    return () => clearInterval(interval);
+  }, [isSearching]);
 
   // History State
   const [results, setResults] = useState([]);
@@ -102,10 +127,17 @@ export default function EmailFinderPage() {
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    if (!domain.trim() || isSearching) return;
+
+    // Updated check: validate domain OR single email based on the current mode
+    const isFormInvalid =
+      mode === "single_email" ? !singleEmail.trim() : !domain.trim();
+
+    if (isFormInvalid || isSearching) return;
 
     setIsSearching(true);
-    const cleanedDomain = cleanDomain(domain);
+
+    // We only clean the domain if we aren't in single_email mode
+    const cleanedDomain = mode !== "single_email" ? cleanDomain(domain) : null;
 
     try {
       const response = await fetch(
@@ -116,7 +148,9 @@ export default function EmailFinderPage() {
           body: JSON.stringify({
             request_type: "email_finder",
             search_mode: mode,
-            domain: cleanedDomain,
+            domain: cleanedDomain, // This will be the cleaned domain or null
+            email:
+              mode === "single_email" ? singleEmail.trim().toLowerCase() : null,
             full_name: mode === "person" ? fullName : null,
             decision_maker_category: mode === "decision_maker" ? role : null,
             user_id: user?.id,
@@ -127,13 +161,14 @@ export default function EmailFinderPage() {
 
       if (!response.ok) throw new Error("Search failed");
 
-      // Wait a bit for Supabase triggers to finish if n8n takes time
+      // Success logic...
       setTimeout(() => {
-        setCurPage(0); // Reset to first page
+        setCurPage(0);
         fetchHistory();
         setIsSearching(false);
         setDomain("");
         setFullName("");
+        setSingleEmail("");
       }, 2000);
     } catch (err) {
       console.error("Search error:", err);
@@ -179,19 +214,56 @@ export default function EmailFinderPage() {
             </div>
 
             <form onSubmit={handleSearch} className="space-y-5">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
-                  Domain Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. apple.com"
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value)}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 text-slate-700 font-medium"
-                />
-              </div>
+              {mode === "single_email" && (
+                <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl mb-5 animate-in fade-in slide-in-from-top-2">
+                  <p className="text-[11px] font-bold text-amber-700 leading-relaxed uppercase tracking-tight">
+                    ⚠️ PRO TIP: Single email validation is designed for custom
+                    business domains. Extensions like{" "}
+                    <span className="underline decoration-amber-300">
+                      gmail.com
+                    </span>
+                    ,{" "}
+                    <span className="underline decoration-amber-300">
+                      hotmail.com
+                    </span>
+                    , and{" "}
+                    <span className="underline decoration-amber-300">
+                      yahoo.com
+                    </span>{" "}
+                    will typically return as invalid.
+                  </p>
+                </div>
+              )}
+
+              {mode !== "single_email" ? (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                    Domain Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. apple.com"
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 text-slate-700 font-medium"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. name@company.com"
+                    value={singleEmail}
+                    onChange={(e) => setSingleEmail(e.target.value)}
+                    className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 text-slate-700 font-medium"
+                  />
+                </div>
+              )}
 
               <AnimatePresence mode="wait">
                 {mode === "person" && (
@@ -251,7 +323,8 @@ export default function EmailFinderPage() {
                   </>
                 ) : (
                   <>
-                    <FaSearch size={14} /> Find Contacts
+                    <FaSearch size={14} />{" "}
+                    {mode === "single_email" ? "Verify Email" : "Find Contacts"}
                   </>
                 )}
               </button>
@@ -274,6 +347,41 @@ export default function EmailFinderPage() {
             {isLoadingHistory ? (
               <div className="flex-1 flex items-center justify-center">
                 <FaSpinner className="animate-spin text-indigo-400" size={32} />
+              </div>
+            ) : isSearching ? (
+              <div className="flex-1 flex flex-col space-y-4">
+                {/* Active Search Skeleton */}
+                <div className="bg-indigo-50/30 border border-indigo-100 rounded-3xl p-8 flex flex-col items-center justify-center text-center space-y-4 animate-pulse">
+                  <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm">
+                    <FaSpinner className="animate-spin" size={24} />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-indigo-900 font-bold text-lg">
+                      {LOADING_STEPS[loadingStep]}
+                    </h3>
+                    <p className="text-indigo-500 text-xs font-medium uppercase tracking-widest">
+                      {mode === "single_email"
+                        ? `Verifying: ${singleEmail}`
+                        : `Processing Domain: ${domain}`}
+                    </p>
+                  </div>
+                  <div className="w-full max-w-xs h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full bg-indigo-600"
+                      initial={{ width: "0%" }}
+                      animate={{ width: "100%" }}
+                      transition={{ duration: 15, ease: "linear" }}
+                    />
+                  </div>
+                </div>
+
+                {/* Faded background items to represent "container where results are stored" */}
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-20 border border-slate-100 rounded-2xl bg-slate-50 opacity-40"
+                  />
+                ))}
               </div>
             ) : results.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-4">
@@ -317,15 +425,19 @@ export default function EmailFinderPage() {
                           {/* Domain & Meta Info */}
                           <div className="flex-1 min-w-[200px]">
                             <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                              {res.domain}
-                              {res.search_type && (
-                                <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 uppercase tracking-tighter">
-                                  {res.search_type}
-                                </span>
-                              )}
+                              {res.search_type === "single_email"
+                                ? res.emails?.[0] || res.domain
+                                : res.domain}
+                              {/* Only show the badge if it's NOT a single email search */}
+                              {res.search_type &&
+                                res.search_type !== "single_email" && (
+                                  <span className="text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase tracking-tighter bg-slate-100 text-slate-500">
+                                    {res.search_type.replace("_", " ")}
+                                  </span>
+                                )}
                             </div>
                             <div className="text-[10px] text-slate-500 font-medium">
-                              {res.full_name || "Company View"} •{" "}
+                              {res.full_name || ""}{" "}
                               {new Date(res.created_at).toLocaleDateString()}
                             </div>
                           </div>
@@ -341,19 +453,20 @@ export default function EmailFinderPage() {
 
                           {/* Actions - Only visible if not 'not found' */}
                           <div className="flex-1 flex justify-end">
-                            {!isNotFound && (
-                              <button
-                                className={`text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all ${
-                                  expandedId === res.id
-                                    ? "bg-indigo-600 text-white"
-                                    : "bg-slate-50 text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600"
-                                }`}
-                              >
-                                {expandedId === res.id
-                                  ? "Hide Details"
-                                  : "Show Emails"}
-                              </button>
-                            )}
+                            {!isNotFound &&
+                              res.search_type !== "single_email" && (
+                                <button
+                                  className={`text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all ${
+                                    expandedId === res.id
+                                      ? "bg-indigo-600 text-white"
+                                      : "bg-slate-50 text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600"
+                                  }`}
+                                >
+                                  {expandedId === res.id
+                                    ? "Hide Details"
+                                    : "Show Emails"}
+                                </button>
+                              )}
                           </div>
                         </div>
 

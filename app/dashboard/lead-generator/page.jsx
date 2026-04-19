@@ -18,13 +18,14 @@ export default function LeadGeneratorPage() {
     result_count: null,
   });
   const [agencyContext, setAgencyContext] = useState(null);
-  
+
   const scrollContainerRef = useRef(null);
 
   // Auto-scroll logic
   useEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      scrollContainerRef.current.scrollTop =
+        scrollContainerRef.current.scrollHeight;
     }
   }, [messages, isTyping]);
 
@@ -37,7 +38,7 @@ export default function LeadGeneratorPage() {
           .select("business_context")
           .eq("org_id", organization.id)
           .single();
-        
+
         if (data) setAgencyContext(data.business_context);
       }
     }
@@ -68,27 +69,30 @@ export default function LeadGeneratorPage() {
     setIsTyping(true);
 
     try {
-      const response = await fetch(process.env.NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          request_type: "lead_generator",
-          previous_context: {
-            business_type: context.business_type,
-            result_count: context.result_count,
-            location: context.location,
-          },
-          chat_message: userMessage,
-          user_id: user?.id,
-          org_id: organization?.id || user?.id, // Fallback to user_id if no org
-          requesting_agency_context: agencyContext,
-        }),
-      });
+      const response = await fetch(
+        process.env.NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            request_type: "lead_generation",
+            previous_context: {
+              business_type: context.business_type,
+              result_count: context.result_count,
+              location: context.location,
+            },
+            chat_message: userMessage,
+            user_id: user?.id,
+            org_id: organization?.id || user?.id, // Fallback to user_id if no org
+            requesting_agency_context: agencyContext,
+          }),
+        },
+      );
 
       if (!response.ok) throw new Error("Webhook failed");
 
       const data = await response.json();
-      
+
       // Update local context from webhook response
       setContext({
         business_type: data.business_type || context.business_type,
@@ -134,7 +138,7 @@ export default function LeadGeneratorPage() {
             Find niche construction companies and more with AI.
           </p>
         </div>
-        
+
         {/* Context Status Badges */}
         <div className="flex items-center gap-2">
           {context.business_type && (
@@ -152,7 +156,7 @@ export default function LeadGeneratorPage() {
 
       {/* Chat Container */}
       <div className="flex-1 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-        <div 
+        <div
           ref={scrollContainerRef}
           className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide"
         >
@@ -164,10 +168,18 @@ export default function LeadGeneratorPage() {
                 key={msg.id}
                 className={`flex gap-4 ${msg.sender === "user" ? "flex-row-reverse" : ""}`}
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${msg.sender === "ai" ? "bg-indigo-100 text-indigo-600" : "bg-slate-200 text-slate-600"}`}>
-                  {msg.sender === "ai" ? <FaRobot size={20} /> : <FaUserCircle size={24} />}
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${msg.sender === "ai" ? "bg-indigo-100 text-indigo-600" : "bg-slate-200 text-slate-600"}`}
+                >
+                  {msg.sender === "ai" ? (
+                    <FaRobot size={20} />
+                  ) : (
+                    <FaUserCircle size={24} />
+                  )}
                 </div>
-                <div className={`p-4 rounded-2xl max-w-[80%] text-sm leading-relaxed ${msg.sender === "user" ? "bg-indigo-600 text-white rounded-tr-none" : "bg-slate-100 text-slate-800 rounded-tl-none shadow-sm"}`}>
+                <div
+                  className={`p-4 rounded-2xl max-w-[80%] text-sm leading-relaxed ${msg.sender === "user" ? "bg-indigo-600 text-white rounded-tr-none" : "bg-slate-100 text-slate-800 rounded-tl-none shadow-sm"}`}
+                >
                   {msg.text}
                 </div>
               </motion.div>
@@ -175,7 +187,11 @@ export default function LeadGeneratorPage() {
           </AnimatePresence>
 
           {isTyping && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex gap-4"
+            >
               <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
                 <FaRobot size={20} />
               </div>
@@ -190,7 +206,10 @@ export default function LeadGeneratorPage() {
 
         {/* Input Bar */}
         <div className="p-4 bg-slate-50/50 border-t border-slate-100 mt-auto">
-          <form onSubmit={handleSubmit} className="flex gap-2 max-w-4xl mx-auto items-center bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
+          <form
+            onSubmit={handleSubmit}
+            className="flex gap-2 max-w-4xl mx-auto items-center bg-white p-2 rounded-2xl shadow-sm border border-slate-200"
+          >
             <input
               type="text"
               value={inputVal}

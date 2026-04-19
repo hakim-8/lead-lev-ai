@@ -21,11 +21,12 @@ import {
   FaChevronRight,
   FaCoins, // Added for Credits icon
 } from "react-icons/fa";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton, useClerk } from "@clerk/nextjs";
 
 export default function DashboardLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const pathname = usePathname();
+  const { openOrganizationProfile } = useClerk();
 
   // Mock credits - you can later replace this with a prop or fetch from Supabase
   const userCredits = 1250;
@@ -100,7 +101,7 @@ export default function DashboardLayout({ children }) {
       <aside
         className={`${
           isSidebarOpen ? "w-72" : "w-20"
-        } fixed inset-y-0 left-0 bg-white border-r border-slate-200 transition-all duration-300 ease-in-out z-30 hidden md:flex flex-col`}
+        }  left-0 bg-white border-r border-slate-200 transition-all duration-300 ease-in-out z-30 md:flex flex-col`}
       >
         {/* Logo Section */}
         <div className="h-20 flex items-center px-6 border-b border-slate-100">
@@ -126,30 +127,49 @@ export default function DashboardLayout({ children }) {
                 </h3>
               )}
               <div className="space-y-1">
-                {section.items.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all group ${
-                      isActive(item.href)
-                        ? "bg-indigo-50 text-indigo-700 shadow-sm"
-                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
-                  >
-                    <item.icon
-                      className={`${isActive(item.href) ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600"} transition-colors`}
-                      size={18}
-                    />
-                    {isSidebarOpen && (
-                      <>
-                        <span className="text-sm font-semibold flex-1">
-                          {item.name}
-                        </span>
-                        {isActive(item.href) && <FaChevronRight size={10} />}
-                      </>
-                    )}
-                  </Link>
-                ))}
+                {section.items.map((item) => {
+                  const isManageOrg = item.name === "Manage Organization";
+                  const baseClass = `w-full flex cursor-pointer items-center gap-3 px-4 py-3 rounded-xl transition-all group ${
+                    isActive(item.href)
+                      ? "bg-indigo-50 text-indigo-700 shadow-sm"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                  }`;
+
+                  const content = (
+                    <>
+                      <item.icon
+                        className={`${isActive(item.href) ? "text-indigo-600" : "text-slate-400 group-hover:text-slate-600"} transition-colors`}
+                        size={18}
+                      />
+                      {isSidebarOpen && (
+                        <>
+                          <span className="text-sm font-semibold flex-1 text-left">
+                            {item.name}
+                          </span>
+                          {isActive(item.href) && <FaChevronRight size={10} />}
+                        </>
+                      )}
+                    </>
+                  );
+
+                  return isManageOrg ? (
+                    <button
+                      key={item.name}
+                      onClick={() => openOrganizationProfile()}
+                      className={baseClass}
+                    >
+                      {content}
+                    </button>
+                  ) : (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={baseClass}
+                    >
+                      {content}
+                    </Link>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -181,11 +201,7 @@ export default function DashboardLayout({ children }) {
       </aside>
 
       {/* Main Content Area */}
-      <main
-        className={`flex-1 flex flex-col transition-all duration-300 ease-in-out ${
-          isSidebarOpen ? "md:ml-72" : "md:ml-20"
-        }`}
-      >
+      <main className="flex-1 flex flex-col min-w-0 h-full">
         {/* Header */}
         <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-20">
           <div className="flex items-center gap-4">
@@ -229,8 +245,10 @@ export default function DashboardLayout({ children }) {
         </header>
 
         {/* Content Wrapper */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-10">
-          <div className="max-w-7xl mx-auto">{children}</div>
+        <div className="flex-1 min-w-0 w-full overflow-hidden">
+          <div className="h-full overflow-y-auto p-6 md:p-10">
+            <div className="max-w-7xl mx-auto w-full">{children}</div>
+          </div>
         </div>
       </main>
     </div>

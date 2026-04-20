@@ -37,11 +37,16 @@ export default function LeadDetailsPage() {
   const [leads, setLeads] = useState([]);
   const [tableName, setTableName] = useState("Loading...");
   const [isLoading, setIsLoading] = useState(true);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
   // Selection State
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  // Modal States
+  const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
 
   // Transfer Modal State
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
@@ -247,6 +252,33 @@ export default function LeadDetailsPage() {
     }
   };
 
+  const handleBulkResetStatus = async () => {
+    if (selectedLeadIds.length === 0) return;
+    setIsResetting(true);
+    try {
+      const { error } = await supabase
+        .from("leads")
+        .update({ email_validity: "untested" })
+        .in("id", selectedLeadIds);
+
+      if (error) throw error;
+      setLeads((prev) =>
+        prev.map((l) =>
+          selectedLeadIds.includes(l.id)
+            ? { ...l, email_validity: "untested" }
+            : l,
+        ),
+      );
+      setSelectedLeadIds([]);
+      alert("Selected leads reset to untested.");
+    } catch (err) {
+      console.error("Error resetting leads:", err);
+      alert("Failed to reset statuses.");
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const handleOpenModal = (lead = null) => {
     if (lead) {
       setCurrentLead(lead);
@@ -284,6 +316,35 @@ export default function LeadDetailsPage() {
       });
     }
     setIsModalOpen(true);
+  };
+
+  const handleVerifyEmails = async () => {
+    setIsVerifying(true);
+    try {
+      const response = await fetch(
+        process.env.NEXT_PUBLIC_N8N_CHAT_WEBHOOK_URL,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            request_type: "bulk_email_verifier",
+            table_id: id,
+          }),
+        },
+      );
+
+      if (response.ok) {
+        // Give it a moment for the background process to settle if needed
+        setTimeout(fetchLeads, 1500);
+      } else {
+        throw new Error("Verification failed");
+      }
+    } catch (err) {
+      console.error("Verification error:", err);
+      alert("Failed to initiate bulk verification.");
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleDeleteLead = async (leadId) => {
@@ -484,6 +545,18 @@ export default function LeadDetailsPage() {
               <FaExchangeAlt size={12} className="text-indigo-400" /> Transfer
             </button>
             <button
+              onClick={handleBulkResetStatus}
+              disabled={isResetting}
+              className="flex items-center gap-2 px-6 py-2.5 bg-slate-800 hover:bg-emerald-600 text-sm font-bold rounded-xl transition-all"
+            >
+              {isResetting ? (
+                <FaSpinner className="animate-spin" />
+              ) : (
+                <FaQuestionCircle size={12} className="text-emerald-400" />
+              )}{" "}
+              Reset to Untested
+            </button>
+            <button
               onClick={handleBulkDelete}
               disabled={isProcessingBulk}
               className="flex items-center gap-2 px-6 py-2.5 bg-slate-800 hover:bg-red-600 text-sm font-bold rounded-xl transition-all"
@@ -505,25 +578,34 @@ export default function LeadDetailsPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between font-sans">
-        <div className="flex items-center gap-2 p-1 px-3 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100 font-sans text-[10px] font-black uppercase tracking-widest">
-          <FaCheckCircle className="shrink-0" size={10} /> Manual Verification
-          Mode
-        </div>
+      <div className="flex items-center justify-end font-sans">
         <button
-          className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all"
-          onClick={() => alert("Verification engine is being initialized...")}
+          disabled={leads.length === 0 || isVerifying}
+          className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={() => setIsVerifyModalOpen(true)}
         >
-          Verify Emails
+          {isVerifying ? (
+            <div className="flex items-center gap-2">
+              <FaSpinner className="animate-spin" /> Verifying...
+            </div>
+          ) : (
+            "Verify Emails"
+          )}
         </button>
       </div>
 
-      {isLoading ? (
-        <div className="bg-white p-20 rounded-[2.5rem] border border-slate-100 flex flex-col items-center justify-center space-y-4 font-sans">
-          <FaSpinner className="animate-spin text-indigo-500" size={40} />
-          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest font-sans">
-            Syncing Leads...
-          </p>
+      {(isLoading || isVerifying) ? (
+        <div className="bg-white p-20 rounded-[2.5rem] border border-slate-100 flex flex-col items-center justify-center space-y-4 font-sans relative overflow-hidden">
+          {/* Animated Gradient Background for Verification */}
+          {isVerifying && (
+            <div className="absolute inset-0 bg-indigo-50/30 animate-pulse transition-all" />
+          )}
+          <div className="relative z-10 flex flex-col items-center gap-4">
+            <FaSpinner className="animate-spin text-indigo-500" size={40} />
+            <p className="text-slate-400 font-bold text-xs uppercase tracking-widest font-sans">
+              {isVerifying ? "Verification Engine Active..." : "Syncing Leads..."}
+            </p>
+          </div>
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-[2.5rem] overflow-hidden shadow-sm flex flex-col font-sans">
@@ -838,6 +920,7 @@ export default function LeadDetailsPage() {
                           setFormData({
                             ...formData,
                             business_email: e.target.value,
+                            email_validity: "untested",
                           })
                         }
                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-50 font-sans"
@@ -960,6 +1043,7 @@ export default function LeadDetailsPage() {
                         setFormData({
                           ...formData,
                           decision_maker_email: e.target.value,
+                          email_validity: "untested",
                         })
                       }
                       className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-50 font-sans"
@@ -1017,6 +1101,44 @@ export default function LeadDetailsPage() {
                     {currentLead ? "Update Perspective" : "Commit Lead"}
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verification Confirmation Modal */}
+      {isVerifyModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm font-sans">
+          <div className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl p-10 space-y-8 font-sans">
+            <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-100">
+              <FaExclamationTriangle size={28} />
+            </div>
+            
+            <div className="text-center space-y-3">
+              <h2 className="text-2xl font-bold text-slate-900 font-sans">
+                Ready to Validate?
+              </h2>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed font-sans">
+                Please take note: Only leads currently marked as <span className="font-bold text-slate-900 px-1.5 py-0.5 bg-slate-50 rounded italic">Untested</span> will be processed. Additionally, records without at least one valid email address (Business or Decision Maker) will be skipped by the verification engine.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3 font-sans">
+              <button
+                onClick={() => {
+                  setIsVerifyModalOpen(false);
+                  handleVerifyEmails();
+                }}
+                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200"
+              >
+                Proceed with Verification
+              </button>
+              <button
+                onClick={() => setIsVerifyModalOpen(false)}
+                className="w-full py-4 text-slate-400 font-bold hover:text-slate-700 transition-colors"
+              >
+                Cancel Action
               </button>
             </div>
           </div>

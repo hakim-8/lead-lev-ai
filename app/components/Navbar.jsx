@@ -36,6 +36,12 @@ export default function Navbar() {
           >
             Pricing
           </Link>
+          <Link
+            href="/docs"
+            className="text-sm font-semibold text-slate-600 hover:text-indigo-600 transition"
+          >
+            Documentation
+          </Link>
         </div>
 
         <div className="flex items-center gap-4">

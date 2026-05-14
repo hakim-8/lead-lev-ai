@@ -20,6 +20,7 @@ import {
   FaSignOutAlt,
   FaChevronRight,
   FaCoins, // Added for Credits icon
+  FaBook,
 } from "react-icons/fa";
 import { UserButton, useClerk } from "@clerk/nextjs";
 
@@ -89,6 +90,16 @@ export default function DashboardLayout({ children }) {
           icon: FaChartBar,
         },
         { name: "Settings", href: "/dashboard/settings", icon: FaCog },
+      ],
+    },
+    {
+      title: "Resources",
+      items: [
+        {
+          name: "Documentation",
+          href: "/docs",
+          icon: FaBook,
+        },
       ],
     },
   ];

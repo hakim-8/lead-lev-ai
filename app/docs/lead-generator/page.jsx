@@ -65,10 +65,10 @@ export default function LeadGeneratorDocs() {
       setIsTyping(false);
       setMessages((prev) => [
         ...prev,
-        { 
-          id: (Date.now() + 1).toString(), 
-          sender: "ai", 
-          text: "Your results have been collected, you can view them in the view leads page." 
+        {
+          id: (Date.now() + 1).toString(),
+          sender: "ai",
+          text: "Your results have been collected, you can view them in the view leads page.",
         },
       ]);
     }, 1500);
@@ -77,18 +77,25 @@ export default function LeadGeneratorDocs() {
   return (
     <div className="space-y-12">
       <div>
-        <h1 className="text-3xl font-bold text-white mb-4">Lead Generator Documentation</h1>
+        <h1 className="text-3xl font-bold text-white mb-4">
+          Lead Generator Documentation
+        </h1>
         <p className="text-slate-400 text-lg">
-          Learn how to generate high-quality leads effortlessly using our AI-powered Lead Generator.
+          Learn how to generate high-quality leads effortlessly using our
+          AI-powered Lead Generator.
         </p>
       </div>
 
       <section className="space-y-6">
         <h2 className="text-2xl font-semibold text-white">How it Works</h2>
         <p className="text-slate-400">
-          All you need to do is enter details such as the <strong className="text-white">business type</strong>, <strong className="text-white">location</strong>, and the <strong className="text-white">number of results</strong> you want, and the AI will handle the rest.
+          All you need to do is enter details such as the{" "}
+          <strong className="text-white">business type</strong>,{" "}
+          <strong className="text-white">location</strong>, and the{" "}
+          <strong className="text-white">number of results</strong> you want,
+          and the AI will handle the rest.
         </p>
-        
+
         {/* Interactive Demo */}
         <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden mt-8">
           <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex items-center gap-3">
@@ -97,7 +104,9 @@ export default function LeadGeneratorDocs() {
               <div className="w-3 h-3 rounded-full bg-slate-800"></div>
               <div className="w-3 h-3 rounded-full bg-slate-800"></div>
             </div>
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-2">Live Demonstration</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-2">
+              Live Demonstration
+            </span>
           </div>
           <div className="h-[400px] flex flex-col">
             <div
@@ -114,17 +123,21 @@ export default function LeadGeneratorDocs() {
                   >
                     <div
                       className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
-                        msg.sender === "ai" 
-                          ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30" 
+                        msg.sender === "ai"
+                          ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
                           : "bg-slate-800 text-slate-400 border border-slate-700"
                       }`}
                     >
-                      {msg.sender === "ai" ? <FaRobot size={18} /> : <FaUserCircle size={20} />}
+                      {msg.sender === "ai" ? (
+                        <FaRobot size={18} />
+                      ) : (
+                        <FaUserCircle size={20} />
+                      )}
                     </div>
                     <div
                       className={`p-4 rounded-2xl max-w-[85%] text-sm leading-relaxed shadow-sm ${
-                        msg.sender === "user" 
-                          ? "bg-indigo-600 text-white rounded-tr-none" 
+                        msg.sender === "user"
+                          ? "bg-indigo-600 text-white rounded-tr-none"
                           : "bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-none"
                       }`}
                     >
@@ -152,7 +165,7 @@ export default function LeadGeneratorDocs() {
               )}
               <div ref={messagesEndRef} />
             </div>
-            
+
             <div className="p-4 bg-slate-900 border-t border-slate-800">
               <form
                 onSubmit={(e) => e.preventDefault()}
@@ -179,42 +192,101 @@ export default function LeadGeneratorDocs() {
       </section>
 
       <section className="space-y-6">
-        <h2 className="text-2xl font-semibold text-white">Viewing Collected Leads</h2>
+        <h2 className="text-2xl font-semibold text-white">
+          Viewing Collected Leads
+        </h2>
         <p className="text-slate-400">
-          After the AI finishes generating and processing your request, all the collected leads are automatically compiled and listed in the <strong className="text-white">View Leads</strong> page.
+          After the AI finishes generating and processing your request, all the
+          collected leads are automatically compiled and listed in the{" "}
+          <strong className="text-white">View Leads</strong> page.
         </p>
-        
+
         <div className="rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl">
-          <Image 
-            src="/lead-list-sc.png" 
-            alt="Lead List View" 
-            width={1200} 
-            height={800} 
+          <Image
+            src="/lead-list-sc.png"
+            alt="Lead List View"
+            width={1200}
+            height={800}
             className="w-full h-auto"
           />
         </div>
       </section>
 
       <section className="space-y-6">
-        <h2 className="text-2xl font-semibold text-white">Custom Lists & Email Verification</h2>
+        <h2 className="text-2xl font-semibold text-white">Custom Lists</h2>
+        <p className="text-slate-400">
+          Need to manage your own specialized contacts outside of the generated
+          leads? You can create{" "}
+          <strong className="text-white">Custom Lists</strong> by visiting the
+          Custom List page.
+        </p>
+
+        <div className="rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl">
+          <Image
+            src="/custom-list-sc.png"
+            alt="Custom List Creation"
+            width={1200}
+            height={800}
+            className="w-full h-auto"
+          />
+        </div>
+
         <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
-          <p className="text-slate-400 mb-6 font-medium leading-relaxed">
-            Need to manage your own specialized contacts outside of the generated leads? You can create <strong>Custom Lists</strong> by visiting the Custom List page. 
-          </p>
           <ul className="space-y-4 text-slate-400">
             <li className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">1</div>
-              <span>Enter the name of your new custom list to initialize it.</span>
+              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">
+                1
+              </div>
+              <span>
+                First, write the name of your new custom list and submit it to
+                initialize it.
+              </span>
             </li>
             <li className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">2</div>
-              <span>Add your own leads manually into the newly created list.</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">3</div>
-              <span>Use the <strong className="text-white">Verify Emails</strong> button to automatically check the validity of all emails within your custom list.</span>
+              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">
+                2
+              </div>
+              <span>
+                Next, add your own leads into the newly created custom list.
+              </span>
             </li>
           </ul>
+        </div>
+      </section>
+
+      <section className="space-y-6">
+        <h2 className="text-2xl font-semibold text-white">
+          Email Verification
+        </h2>
+        <p className="text-slate-400">
+          Any lead list, whether AI-generated or custom-generated, can have its
+          emails verified. AI-generated leads initially go through an email
+          search using the domain of the lead, however, some emails may still
+          slip through the cracks and go undetected. Once you click the{" "}
+          <strong className="text-white">Verify Emails</strong> button, it
+          verifies if each individual email is valid.
+        </p>
+
+        <div className="rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl">
+          <Image
+            src="/verify-button.png"
+            alt="Verify Emails List"
+            width={1200}
+            height={800}
+            className="w-full h-auto"
+          />
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+          <p className="text-slate-400">
+            When you initiate the verification process, it's important to note
+            that only leads with an email validity status of{" "}
+            <strong className="text-white border border-slate-700 bg-slate-800 px-1.5 py-0.5 rounded text-sm">
+              untested
+            </strong>{" "}
+            will undergo verification. This ensures efficient processing by
+            focusing solely on unchecked addresses.
+          </p>
         </div>
       </section>
     </div>

@@ -16,7 +16,8 @@ export default function WebsiteGeneratorDocs() {
 
   useEffect(() => {
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      scrollContainerRef.current.scrollTop =
+        scrollContainerRef.current.scrollHeight;
     }
   }, [messages, isTyping]);
 
@@ -64,10 +65,10 @@ export default function WebsiteGeneratorDocs() {
       setIsTyping(false);
       setMessages((prev) => [
         ...prev,
-        { 
-          id: (Date.now() + 1).toString(), 
-          sender: "ai", 
-          text: "The report has been sent to your email." 
+        {
+          id: (Date.now() + 1).toString(),
+          sender: "ai",
+          text: "The report has been sent to your email.",
         },
       ]);
     }, 1500);
@@ -76,9 +77,12 @@ export default function WebsiteGeneratorDocs() {
   return (
     <div className="space-y-12">
       <div>
-        <h1 className="text-3xl font-bold text-white mb-4">Website Report Generator</h1>
+        <h1 className="text-3xl font-bold text-white mb-4">
+          Website Report Generator
+        </h1>
         <p className="text-slate-400 text-lg">
-          Learn how to request comprehensive AI-generated audits and reports for any website.
+          Learn how to request comprehensive AI-generated audits and reports for
+          any website.
         </p>
       </div>
 
@@ -89,17 +93,24 @@ export default function WebsiteGeneratorDocs() {
             <FaGlobe size={24} />
           </div>
           <div>
-            <h3 className="text-lg font-medium text-white mb-2">Simple Requests</h3>
+            <h3 className="text-lg font-medium text-white mb-2">
+              Simple Requests
+            </h3>
             <p className="text-slate-400 leading-relaxed">
-              All you need to do is provide an <strong className="text-white">email address</strong> and a <strong className="text-white">website URL</strong>. 
-              The system will analyze the target site, compile a detailed report, and have it generated and sent directly over to the provided email address.
+              All you need to do is provide an{" "}
+              <strong className="text-white">email address</strong> and a{" "}
+              <strong className="text-white">website URL</strong>. The system
+              will analyze the target site, compile a detailed report, and have
+              it generated and sent directly over to the provided email address.
             </p>
           </div>
         </div>
       </section>
 
       <section className="space-y-6">
-        <h2 className="text-2xl font-semibold text-white">Live Demonstration</h2>
+        <h2 className="text-2xl font-semibold text-white">
+          Live Demonstration
+        </h2>
         <p className="text-slate-400 mb-6">
           Watch the AI process a report request in real-time below:
         </p>
@@ -111,7 +122,9 @@ export default function WebsiteGeneratorDocs() {
               <div className="w-3 h-3 rounded-full bg-slate-800"></div>
               <div className="w-3 h-3 rounded-full bg-slate-800"></div>
             </div>
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-2">Web Report Demo</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-2">
+              Web Report Demo
+            </span>
           </div>
           <div className="h-[400px] flex flex-col">
             <div
@@ -128,17 +141,21 @@ export default function WebsiteGeneratorDocs() {
                   >
                     <div
                       className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${
-                        msg.sender === "ai" 
-                          ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30" 
+                        msg.sender === "ai"
+                          ? "bg-indigo-500/20 text-indigo-400 border border-indigo-500/30"
                           : "bg-slate-800 text-slate-400 border border-slate-700"
                       }`}
                     >
-                      {msg.sender === "ai" ? <FaRobot size={18} /> : <FaUserCircle size={20} />}
+                      {msg.sender === "ai" ? (
+                        <FaRobot size={18} />
+                      ) : (
+                        <FaUserCircle size={20} />
+                      )}
                     </div>
                     <div
                       className={`p-4 rounded-2xl max-w-[85%] text-sm leading-relaxed shadow-sm ${
-                        msg.sender === "user" 
-                          ? "bg-indigo-600 text-white rounded-tr-none" 
+                        msg.sender === "user"
+                          ? "bg-indigo-600 text-white rounded-tr-none"
                           : "bg-slate-800 text-slate-200 border border-slate-700 rounded-tl-none"
                       }`}
                     >
@@ -166,7 +183,7 @@ export default function WebsiteGeneratorDocs() {
               )}
               <div ref={messagesEndRef} />
             </div>
-            
+
             <div className="p-4 bg-slate-900 border-t border-slate-800">
               <form
                 onSubmit={(e) => e.preventDefault()}
@@ -189,6 +206,79 @@ export default function WebsiteGeneratorDocs() {
               </form>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="space-y-6">
+        <h2 className="text-2xl font-semibold text-white">
+          What's in the Report?
+        </h2>
+        <p className="text-slate-400">
+          The generated sales report provides a comprehensive analysis to help
+          you understand and pitch to your prospects effectively. It includes:
+        </p>
+        <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+          <ul className="space-y-4 text-slate-400">
+            <li className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">
+                1
+              </div>
+              <div>
+                <strong className="text-white block mb-1">
+                  Executive Summary
+                </strong>
+                <span>
+                  A clear summary of what the business does and what they are
+                  about.
+                </span>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">
+                2
+              </div>
+              <div>
+                <strong className="text-white block mb-1">SWOT Analysis</strong>
+                <span>An in-depth look at their strengths and weaknesses.</span>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">
+                3
+              </div>
+              <div>
+                <strong className="text-white block mb-1">
+                  Strategic Sales Insights
+                </strong>
+                <span>Key insights to guide your sales approach.</span>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">
+                4
+              </div>
+              <div>
+                <strong className="text-white block mb-1">
+                  Actionable Recommendations
+                </strong>
+                <span>
+                  Practical, next-step recommendations to effectively engage the
+                  prospect.
+                </span>
+              </div>
+            </li>
+            <li className="flex items-start gap-3">
+              <div className="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold border border-indigo-500/30">
+                5
+              </div>
+              <div>
+                <strong className="text-white block mb-1">Pitch Angle</strong>
+                <span>
+                  The best angle and messaging strategy for your sales pitch.
+                </span>
+              </div>
+            </li>
+          </ul>
         </div>
       </section>
     </div>

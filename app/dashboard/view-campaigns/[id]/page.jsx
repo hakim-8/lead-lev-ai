@@ -199,6 +199,13 @@ export default function CampaignSetupWizard() {
   const generatePreview = async () => {
     setIsPreviewLoading(true);
     try {
+      const orgId = organization?.id || user?.id;
+      const { data: orgData } = await supabase
+        .from("organizations")
+        .select("username, host, port, password, ssl-tls-toggle, host_name")
+        .eq("org_id", orgId)
+        .single();
+
       const response = await fetch(
         process.env.NEXT_PUBLIC_N8N_EMAIL_PREVIEW_URL,
         {
@@ -209,13 +216,19 @@ export default function CampaignSetupWizard() {
             campaign_id: id,
             table_id: selectedTableId,
             name: stripTimestamp(campaign?.campaign_name || ""),
-            org_id: organization?.id || user?.id,
+            org_id: orgId,
             tone,
             goal,
             subject,
             follow_ups: followUps,
             delay_hours: delayHours,
             include_risky: includeRisky,
+            username: orgData?.username,
+            host: orgData?.host,
+            port: orgData?.port,
+            password: orgData?.password,
+            "ssl-tls-toggle": orgData?.["ssl-tls-toggle"],
+            hostname: orgData?.host_name,
           }),
         },
       );
@@ -232,6 +245,13 @@ export default function CampaignSetupWizard() {
     if (!confirm("Launch this campaign sequence now?")) return;
     setIsLaunching(true);
     try {
+      const orgId = organization?.id || user?.id;
+      const { data: orgData } = await supabase
+        .from("organizations")
+        .select("username, host, port, password, ssl-tls-toggle, host_name")
+        .eq("org_id", orgId)
+        .single();
+
       const response = await fetch(
         process.env.NEXT_PUBLIC_N8N_EMAIL_PREVIEW_URL,
         {
@@ -243,13 +263,19 @@ export default function CampaignSetupWizard() {
             campaign_id: id,
             table_id: selectedTableId,
             name: stripTimestamp(campaign?.campaign_name || ""),
-            org_id: organization?.id || user?.id,
+            org_id: orgId,
             tone,
             goal,
             subject,
             follow_ups: followUps,
             delay_hours: delayHours,
             include_risky: includeRisky,
+            username: orgData?.username,
+            host: orgData?.host,
+            port: orgData?.port,
+            password: orgData?.password,
+            "ssl-tls-toggle": orgData?.["ssl-tls-toggle"],
+            hostname: orgData?.host_name,
           }),
         },
       );

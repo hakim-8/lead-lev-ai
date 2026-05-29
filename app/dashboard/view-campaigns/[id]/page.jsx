@@ -76,9 +76,11 @@ export default function CampaignSetupWizard() {
   const [includeRisky, setIncludeRisky] = useState(false);
   const [followUps, setFollowUps] = useState(0);
   const [delayHours, setDelayHours] = useState(24);
-  const [subject, setSubject] = useState("");
   const [tone, setTone] = useState("Friendly");
   const [goal, setGoal] = useState("");
+  const [subject, setSubject] = useState("");
+  const [activeEmailCount, setActiveEmailCount] = useState(0);
+  const [isSlotLoading, setIsSlotLoading] = useState(true);
 
   // Preview Data
   const [previewData, setPreviewData] = useState(null);
@@ -125,14 +127,39 @@ export default function CampaignSetupWizard() {
     const orgId = organization?.id || user?.id;
     if (!orgId) return;
     try {
-      const { data } = await supabase
+      // 1. Fetch Tables
+      const { data: tableData } = await supabase
         .from("lead_tables")
         .select("id, table_name, number_of_leads")
         .eq("org_id", orgId)
         .order("created_at", { ascending: false });
-      setTables(data || []);
+      setTables(tableData || []);
+
+      // 2. Fetch Organization SMTP Slots to calculate capacity
+      setIsSlotLoading(true);
+      const { data: orgData } = await supabase
+        .from("organizations")
+        .select("*")
+        .eq("org_id", orgId)
+        .single();
+
+      let slots = 0;
+      for (let i = 1; i <= 5; i++) {
+        if (
+          orgData?.[`username_${i}`] &&
+          orgData?.[`password_${i}`] &&
+          orgData?.[`host_${i}`] &&
+          orgData?.[`port_${i}`]
+        ) {
+          slots++;
+        }
+      }
+      // If no slots found but legacy password exists (optional handling, but based on user prompt we count defined sets)
+      setActiveEmailCount(slots || 1);
     } catch (err) {
-      console.error("Error fetching tables:", err);
+      console.error("Error fetching tables/org:", err);
+    } finally {
+      setIsSlotLoading(false);
     }
   };
 
@@ -200,11 +227,41 @@ export default function CampaignSetupWizard() {
     setIsPreviewLoading(true);
     try {
       const orgId = organization?.id || user?.id;
+      const columns = [];
+      for (let i = 1; i <= 5; i++) {
+        columns.push(
+          `username_${i}`,
+          `host_${i}`,
+          `port_${i}`,
+          `password_${i}`,
+        );
+      }
+
       const { data: orgData } = await supabase
         .from("organizations")
-        .select("username, host, port, password, ssl-tls-toggle, host_name")
+        .select(
+          `username, host, port, password, ssl-tls-toggle, host_name, ${columns.join(", ")}`,
+        )
         .eq("org_id", orgId)
         .single();
+
+      const emailData = {
+        username: orgData?.username,
+        host: orgData?.host,
+        port: orgData?.port,
+        password: orgData?.password,
+        "ssl-tls-toggle": orgData?.["ssl-tls-toggle"],
+        hostname: orgData?.host_name,
+      };
+
+      for (let i = 1; i <= 5; i++) {
+        if (orgData?.[`username_${i}`]) {
+          emailData[`username_${i}`] = orgData[`username_${i}`];
+          emailData[`host_${i}`] = orgData[`host_${i}`];
+          emailData[`port_${i}`] = orgData[`port_${i}`];
+          emailData[`password_${i}`] = orgData[`password_${i}`];
+        }
+      }
 
       const response = await fetch(
         process.env.NEXT_PUBLIC_N8N_EMAIL_PREVIEW_URL,
@@ -223,12 +280,7 @@ export default function CampaignSetupWizard() {
             follow_ups: followUps,
             delay_hours: delayHours,
             include_risky: includeRisky,
-            username: orgData?.username,
-            host: orgData?.host,
-            port: orgData?.port,
-            password: orgData?.password,
-            "ssl-tls-toggle": orgData?.["ssl-tls-toggle"],
-            hostname: orgData?.host_name,
+            ...emailData,
           }),
         },
       );
@@ -246,11 +298,41 @@ export default function CampaignSetupWizard() {
     setIsLaunching(true);
     try {
       const orgId = organization?.id || user?.id;
+      const columns = [];
+      for (let i = 1; i <= 5; i++) {
+        columns.push(
+          `username_${i}`,
+          `host_${i}`,
+          `port_${i}`,
+          `password_${i}`,
+        );
+      }
+
       const { data: orgData } = await supabase
         .from("organizations")
-        .select("username, host, port, password, ssl-tls-toggle, host_name")
+        .select(
+          `username, host, port, password, ssl-tls-toggle, host_name, ${columns.join(", ")}`,
+        )
         .eq("org_id", orgId)
         .single();
+
+      const emailData = {
+        username: orgData?.username,
+        host: orgData?.host,
+        port: orgData?.port,
+        password: orgData?.password,
+        "ssl-tls-toggle": orgData?.["ssl-tls-toggle"],
+        hostname: orgData?.host_name,
+      };
+
+      for (let i = 1; i <= 5; i++) {
+        if (orgData?.[`username_${i}`]) {
+          emailData[`username_${i}`] = orgData[`username_${i}`];
+          emailData[`host_${i}`] = orgData[`host_${i}`];
+          emailData[`port_${i}`] = orgData[`port_${i}`];
+          emailData[`password_${i}`] = orgData[`password_${i}`];
+        }
+      }
 
       const response = await fetch(
         process.env.NEXT_PUBLIC_N8N_EMAIL_PREVIEW_URL,
@@ -270,12 +352,7 @@ export default function CampaignSetupWizard() {
             follow_ups: followUps,
             delay_hours: delayHours,
             include_risky: includeRisky,
-            username: orgData?.username,
-            host: orgData?.host,
-            port: orgData?.port,
-            password: orgData?.password,
-            "ssl-tls-toggle": orgData?.["ssl-tls-toggle"],
-            hostname: orgData?.host_name,
+            ...emailData,
           }),
         },
       );
@@ -590,9 +667,7 @@ export default function CampaignSetupWizard() {
                         />
                       </div>
                       <button
-                        onClick={() =>
-                          setFollowUps(Math.min(10, followUps + 1))
-                        }
+                        onClick={() => setFollowUps(Math.min(5, followUps + 1))}
                         className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-all font-sans"
                       >
                         <FaPlus size={14} />
@@ -600,46 +675,113 @@ export default function CampaignSetupWizard() {
                     </div>
                   </div>
 
-                  <div className="space-y-6 font-sans">
-                    <div className="flex justify-between items-center font-sans">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 font-sans">
-                        Delay Interval (Per Follow-up)
-                      </label>
-                      <span className="text-2xl font-black text-indigo-600 font-sans">
-                        {delayHours} Hours
-                      </span>
-                    </div>
-                    <div className="px-2 font-sans">
-                      <input
-                        type="range"
-                        min="2"
-                        max="120"
-                        step="2"
-                        value={delayHours}
-                        onChange={(e) =>
-                          setDelayHours(parseInt(e.target.value))
-                        }
-                        className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 font-sans"
-                      />
-                      <div className="flex justify-between mt-4 text-[10px] font-black text-slate-300 uppercase tracking-widest font-sans">
-                        <span>2 Hours</span>
-                        <span>24 Hours</span>
-                        <span>48 Hours</span>
-                        <span>72 Hours</span>
-                        <span>96 Hours</span>
-                        <span>120 Hours</span>
+                  {(() => {
+                    const totalMaxPerDay = 40 * activeEmailCount;
+                    const leadsToEmail = includeRisky
+                      ? tableStats.total
+                      : tableStats.valid;
+                    const ratio = leadsToEmail / totalMaxPerDay;
+
+                    let minDelay = 24;
+                    if (ratio > 1 && ratio <= 2) minDelay = 48;
+                    else if (ratio > 2 && ratio <= 3) minDelay = 72;
+                    else if (ratio > 3 && ratio <= 4) minDelay = 96;
+                    else if (ratio > 4 && ratio <= 5) minDelay = 120;
+
+                    if (ratio > 5) {
+                      return (
+                        <div className="bg-red-50 p-10 rounded-[2.5rem] border border-red-200 space-y-6 animate-in zoom-in-95 font-sans">
+                          <div className="flex gap-4 items-start font-sans">
+                            <FaExclamationTriangle
+                              className="text-red-500 shrink-0 mt-1 font-sans"
+                              size={24}
+                            />
+                            <div className="space-y-4 font-sans">
+                              <p className="text-xl font-black text-red-700 font-sans leading-tight">
+                                List Load Capacity Exceeded
+                              </p>
+                              <p className="text-sm font-medium text-red-600 leading-relaxed font-sans">
+                                You have too many leads in your list for a
+                                campaign. The maximum should be{" "}
+                                <b>{totalMaxPerDay * 5} leads</b> (5x your total
+                                daily sending capacity of {totalMaxPerDay}{" "}
+                                emails across {activeEmailCount} connected
+                                account{activeEmailCount > 1 ? "s" : ""}).
+                              </p>
+                              <div className="bg-white/50 p-6 rounded-2xl border border-red-100 flex flex-col gap-2">
+                                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-red-400">
+                                  <span>Active Leads</span>
+                                  <span>{leadsToEmail}</span>
+                                </div>
+                                <div className="h-2 bg-red-100 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-red-500"
+                                    style={{ width: "100%" }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => router.push("/dashboard/settings")}
+                            className="w-full py-4 bg-red-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-all shadow-xl shadow-red-50 font-sans flex items-center justify-center gap-2"
+                          >
+                            <FaPlus size={10} /> Connect More SMTP Accounts
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-6 font-sans">
+                        <div className="flex justify-between items-center font-sans">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 font-sans">
+                            Delay Interval (Per Follow-up)
+                          </label>
+                          <span className="text-2xl font-black text-indigo-600 font-sans">
+                            {delayHours < minDelay ? minDelay : delayHours}{" "}
+                            Hours
+                          </span>
+                        </div>
+                        <div className="px-2 font-sans">
+                          <input
+                            type="range"
+                            min={minDelay}
+                            max="120"
+                            step="2"
+                            value={
+                              delayHours < minDelay ? minDelay : delayHours
+                            }
+                            onChange={(e) =>
+                              setDelayHours(parseInt(e.target.value))
+                            }
+                            className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600 font-sans"
+                          />
+                          <div className="flex justify-between mt-4 text-[10px] font-black text-slate-300 uppercase tracking-widest font-sans">
+                            {minDelay <= 24 && <span>24 Hours</span>}
+                            {minDelay <= 48 && <span>48 Hours</span>}
+                            {minDelay <= 72 && <span>72 Hours</span>}
+                            {minDelay <= 96 && <span>96 Hours</span>}
+                            <span>120 Hours</span>
+                          </div>
+                        </div>
+                        <div
+                          className={`p-6 rounded-3xl border flex items-center gap-4 font-sans ${delayHours < minDelay ? "bg-amber-50 border-amber-100" : "bg-indigo-50/50 border-indigo-100"}`}
+                        >
+                          <FaInfoCircle
+                            className={`${delayHours < minDelay ? "text-amber-400" : "text-indigo-400"} shrink-0 font-sans`}
+                          />
+                          <p
+                            className={`text-xs font-medium leading-relaxed font-sans ${delayHours < minDelay ? "text-amber-600" : "text-indigo-600"}`}
+                          >
+                            {delayHours < minDelay
+                              ? `Based on your list size and SMTP capacity, the minimum safe delay is ${minDelay} hours to protect your domain reputation.`
+                              : `Each follow-up will be sent approximately ${delayHours} hours after the previous touch-point. We recommend 2-5 days for professional outreach.`}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="bg-indigo-50/50 p-6 rounded-3xl border border-indigo-100 flex items-center gap-4 font-sans">
-                      <FaInfoCircle className="text-indigo-400 shrink-0 font-sans" />
-                      <p className="text-xs font-medium text-indigo-600 leading-relaxed font-sans">
-                        Each follow-up will be sent approximately{" "}
-                        <b>{delayHours} hours</b> after the previous
-                        touch-point. We recommend 2-5 days (48h-120h) for
-                        professional B2B outreach.
-                      </p>
-                    </div>
-                  </div>
+                    );
+                  })()}
                 </div>
               </motion.div>
             )}

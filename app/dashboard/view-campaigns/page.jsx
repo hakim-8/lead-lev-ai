@@ -60,7 +60,7 @@ export default function ViewCampaignsPage() {
 
   const startEditing = (campaign) => {
     setEditingId(campaign.id);
-    setNewName(stripTimestamp(campaign.campaign_name));
+    setNewName(stripTimestamp(campaign.name));
   };
 
   const handleRename = async (id, originalName) => {
@@ -79,14 +79,13 @@ export default function ViewCampaignsPage() {
       // Uniqueness check
       const { data: existing } = await supabase
         .from("email_campaigns")
-        .select("id, campaign_name")
+        .select("id, name")
         .eq("org_id", orgId)
         .neq("id", id);
 
       const isDuplicate = existing?.some(
         (c) =>
-          stripTimestamp(c.campaign_name).toLowerCase() ===
-          newName.trim().toLowerCase(),
+          stripTimestamp(c.name).toLowerCase() === newName.trim().toLowerCase(),
       );
 
       if (isDuplicate) {
@@ -97,13 +96,13 @@ export default function ViewCampaignsPage() {
 
       const { error } = await supabase
         .from("email_campaigns")
-        .update({ campaign_name: finalName })
+        .update({ name: finalName })
         .eq("id", id);
 
       if (error) throw error;
 
       setCampaigns((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, campaign_name: finalName } : c)),
+        prev.map((c) => (c.id === id ? { ...c, name: finalName } : c)),
       );
       setEditingId(null);
     } catch (err) {
@@ -215,7 +214,7 @@ export default function ViewCampaignsPage() {
                       <div className="flex gap-2 font-sans">
                         <button
                           onClick={() =>
-                            handleRename(campaign.id, campaign.campaign_name)
+                            handleRename(campaign.id, campaign.name)
                           }
                           disabled={isUpdating}
                           className="flex-1 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2"
@@ -238,8 +237,9 @@ export default function ViewCampaignsPage() {
                     </div>
                   ) : (
                     <div className="mb-6 font-sans">
-                      <h3 className="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1 mb-1 font-sans">
-                        {stripTimestamp(campaign.campaign_name)}
+                      <h3 className="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-2 mb-1 font-sans">
+                        {" "}
+                        {stripTimestamp(campaign.name)}
                       </h3>
                       <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center gap-2 font-sans">
                         <FaCalendarAlt size={10} /> Started{" "}
@@ -351,7 +351,7 @@ export default function ViewCampaignsPage() {
                           : "bg-slate-50 text-slate-300 border border-transparent cursor-not-allowed font-medium"
                       }`}
                       onClick={() =>
-                        alert("Aggregating live outreach statistics...")
+                        router.push(`/dashboard/view-campaigns/${campaign.id}/stats`)
                       }
                     >
                       <FaChartBar size={12} />{" "}

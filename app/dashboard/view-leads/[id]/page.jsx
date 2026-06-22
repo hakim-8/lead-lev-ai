@@ -28,6 +28,7 @@ import {
   FaChevronDown,
 } from "react-icons/fa";
 import { supabase } from "../../../lib/supabase";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function LeadDetailsPage() {
   const { id } = useParams();
@@ -39,6 +40,15 @@ export default function LeadDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeCampaign, setActiveCampaign] = useState(false);
+  const [feedback, setFeedback] = useState({ isOpen: false, type: "success", message: "" });
+  
+  const showFeedback = (type, message) => {
+    setFeedback({ isOpen: true, type, message });
+    setTimeout(() => {
+      setFeedback((prev) => ({ ...prev, isOpen: false }));
+    }, 4000);
+  };
 
   // Selection State
   const [selectedLeadIds, setSelectedLeadIds] = useState([]);
@@ -78,8 +88,23 @@ export default function LeadDetailsPage() {
     if (id) {
       fetchLeads();
       fetchTableInfo();
+      fetchActiveCampaign();
     }
   }, [id]);
+
+  const fetchActiveCampaign = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("email_campaigns")
+        .select("id")
+        .eq("table_id", id)
+        .eq("status", "Ongoing");
+      
+      if (data && data.length > 0) setActiveCampaign(true);
+    } catch (err) {
+      console.error("Error fetching active campaign:", err);
+    }
+  };
 
   const fetchTableInfo = async () => {
     try {
@@ -127,7 +152,22 @@ export default function LeadDetailsPage() {
         .order("table_name", { ascending: true });
 
       if (error) throw error;
-      setAvailableTables(data || []);
+
+      // 2. Fetch active campaign tables
+      const { data: activeCampaigns, error: campsError } = await supabase
+        .from("email_campaigns")
+        .select("table_id")
+        .eq("org_id", orgId)
+        .eq("status", "Ongoing");
+
+      if (campsError) throw campsError;
+
+      const activeTableIds = activeCampaigns?.map((c) => c.table_id) || [];
+
+      // 3. Filter data
+      const filteredData = data?.filter((t) => !activeTableIds.includes(t.id)) || [];
+
+      setAvailableTables(filteredData);
     } catch (err) {
       console.error("Error fetching tables:", err);
     } finally {
@@ -188,10 +228,10 @@ export default function LeadDetailsPage() {
 
       setLeads((prev) => prev.filter((l) => !selectedLeadIds.includes(l.id)));
       setSelectedLeadIds([]);
-      alert("Leads deleted successfully.");
+      showFeedback("success", "Leads deleted successfully.");
     } catch (err) {
       console.error("Error deleting leads:", err);
-      alert("Failed to delete selected leads.");
+      showFeedback("error", "Failed to delete selected leads.");
     } finally {
       setIsProcessingBulk(false);
     }
@@ -243,10 +283,10 @@ export default function LeadDetailsPage() {
       setLeads((prev) => prev.filter((l) => !selectedLeadIds.includes(l.id)));
       setSelectedLeadIds([]);
       setIsTransferModalOpen(false);
-      alert("Leads transferred successfully.");
+      showFeedback("success", "Leads transferred successfully.");
     } catch (err) {
       console.error("Error transferring leads:", err);
-      alert("Failed to transfer leads.");
+      showFeedback("error", "Failed to transfer leads.");
     } finally {
       setIsProcessingBulk(false);
     }
@@ -270,10 +310,10 @@ export default function LeadDetailsPage() {
         ),
       );
       setSelectedLeadIds([]);
-      alert("Selected leads reset to untested.");
+      showFeedback("success", "Selected leads reset to untested.");
     } catch (err) {
       console.error("Error resetting leads:", err);
-      alert("Failed to reset statuses.");
+      showFeedback("error", "Failed to reset statuses.");
     } finally {
       setIsResetting(false);
     }
@@ -341,7 +381,7 @@ export default function LeadDetailsPage() {
       }
     } catch (err) {
       console.error("Verification error:", err);
-      alert("Failed to initiate bulk verification.");
+      showFeedback("error", "Failed to initiate bulk verification.");
     } finally {
       setIsVerifying(false);
     }
@@ -372,7 +412,7 @@ export default function LeadDetailsPage() {
       setLeads((prev) => prev.filter((l) => l.id !== leadId));
     } catch (err) {
       console.error("Error deleting lead:", err);
-      alert("Failed to delete lead.");
+      showFeedback("error", "Failed to delete lead.");
     }
   };
 
@@ -425,7 +465,7 @@ export default function LeadDetailsPage() {
       setIsModalOpen(false);
     } catch (err) {
       console.error("Error saving lead:", err);
-      alert("Failed to save lead details.");
+      showFeedback("error", "Failed to save lead details.");
     } finally {
       setIsSaving(false);
     }
@@ -480,6 +520,40 @@ export default function LeadDetailsPage() {
 
   return (
     <div className="space-y-6 font-sans relative">
+      {/* Feedback Modal */}
+      <AnimatePresence>
+        {feedback.isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: -20, x: "-50%" }}
+            className={`fixed top-6 left-1/2 z-[200] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl font-sans ${
+              feedback.type === "success" 
+                ? "bg-emerald-900 border border-emerald-800 text-white" 
+                : "bg-red-900 border border-red-800 text-white"
+            }`}
+          >
+            {feedback.type === "success" ? (
+              <FaCheckCircle className="text-emerald-400" size={20} />
+            ) : (
+              <FaExclamationTriangle className="text-red-400" size={20} />
+            )}
+            <div className="flex flex-col">
+              <span className={`text-[10px] uppercase font-black tracking-widest ${feedback.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
+                {feedback.type === "success" ? "Success" : "Error"}
+              </span>
+              <span className="text-sm font-bold">{feedback.message}</span>
+            </div>
+            <button 
+              onClick={() => setFeedback(prev => ({ ...prev, isOpen: false }))}
+              className={`ml-4 p-2 hover:bg-white/10 rounded-xl transition-colors ${feedback.type === "success" ? "text-emerald-300" : "text-red-300"}`}
+            >
+              <FaTimes size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 font-sans">
         <div className="flex items-center gap-4">
           <button
@@ -514,13 +588,27 @@ export default function LeadDetailsPage() {
             />
           </div>
           <button
-            onClick={() => handleOpenModal()}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all font-sans"
+            onClick={() => !activeCampaign && handleOpenModal()}
+            disabled={activeCampaign}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-700 transition-all font-sans disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FaPlus size={12} /> Add Lead
           </button>
         </div>
       </div>
+
+      {/* Campaign Lock Banner */}
+      {activeCampaign && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4">
+          <FaExclamationTriangle className="text-amber-500 mt-1 shrink-0" size={24} />
+          <div>
+            <h3 className="text-sm font-bold text-amber-800 tracking-tight">Active Campaign Lock</h3>
+            <p className="text-xs text-amber-700 font-medium mt-1 pr-10">
+              This lead collection is actively being processed by an "Ongoing" campaign. Adding, editing, deleting, or transferring records has been disabled to preserve data integrity and prevent race conditions.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Action Bar */}
       {selectedLeadIds.length > 0 && (
@@ -580,7 +668,7 @@ export default function LeadDetailsPage() {
 
       <div className="flex items-center justify-end font-sans">
         <button
-          disabled={leads.length === 0 || isVerifying}
+          disabled={leads.length === 0 || isVerifying || activeCampaign}
           className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => setIsVerifyModalOpen(true)}
         >
@@ -616,12 +704,13 @@ export default function LeadDetailsPage() {
                   <th className="px-6 py-4 w-12 text-center border-r border-slate-100 font-sans">
                     <input
                       type="checkbox"
+                      disabled={activeCampaign}
                       checked={
                         selectedLeadIds.length === leads.length &&
                         leads.length > 0
                       }
                       onChange={toggleSelectAll}
-                      className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                      className="w-4 h-4 accent-indigo-600 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 font-sans">
@@ -656,9 +745,10 @@ export default function LeadDetailsPage() {
                     <td className="px-6 py-6 border-r border-slate-50 text-center font-sans">
                       <input
                         type="checkbox"
+                        disabled={activeCampaign}
                         checked={selectedLeadIds.includes(lead.id)}
                         onChange={() => toggleSelectLead(lead.id)}
-                        className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                        className="w-4 h-4 accent-indigo-600 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                     </td>
                     <td className="px-6 py-6 min-w-[300px]">
@@ -790,15 +880,17 @@ export default function LeadDetailsPage() {
                     <td className="px-6 py-6 border-l border-slate-50 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => handleOpenModal(lead)}
-                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center font-sans shadow-sm"
+                          disabled={activeCampaign}
+                          onClick={() => !activeCampaign && handleOpenModal(lead)}
+                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center font-sans shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400"
                           title="Edit Lead"
                         >
                           <FaEdit size={12} />
                         </button>
                         <button
-                          onClick={() => handleDeleteLead(lead.id)}
-                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center font-sans shadow-sm"
+                          disabled={activeCampaign}
+                          onClick={() => !activeCampaign && handleDeleteLead(lead.id)}
+                          className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center font-sans shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400"
                           title="Remove Lead"
                         >
                           <FaTrashAlt size={12} />

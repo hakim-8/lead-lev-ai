@@ -66,7 +66,7 @@ export default function NewCampaignPage() {
       const { data, error: insertError } = await supabase
         .from("email_campaigns")
         .insert({
-          user_id: user?.id,
+          creator_user_id: user?.id,
           org_id: orgId,
           name: finalName,
           status: "Not Started",

@@ -60,6 +60,9 @@ export default function CampaignSetupWizard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
+  const [showLaunchConfirm, setShowLaunchConfirm] = useState(false);
+  const [launchStatus, setLaunchStatus] = useState(null); // 'success' | 'failure' | 'validation_error'
+  const [launchErrorType, setLaunchErrorType] = useState(null); // 'table_in_use' | 'max_campaigns'
 
   // Campaign State
   const [campaign, setCampaign] = useState(null);
@@ -214,7 +217,7 @@ export default function CampaignSetupWizard() {
         }
         setCurrentStep((prev) => prev + 1);
       } else {
-        handleLaunch();
+        setShowLaunchConfirm(true);
       }
     } catch (err) {
       console.error("Save error:", err);
@@ -269,7 +272,6 @@ export default function CampaignSetupWizard() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            type: "preview",
             campaign_id: id,
             table_id: selectedTableId,
             name: stripTimestamp(campaign?.campaign_name || ""),
@@ -294,82 +296,81 @@ export default function CampaignSetupWizard() {
   };
 
   const handleLaunch = async () => {
-    if (!confirm("Launch this campaign sequence now?")) return;
     setIsLaunching(true);
+    setShowLaunchConfirm(false);
     try {
       const orgId = organization?.id || user?.id;
-      const columns = [];
-      for (let i = 1; i <= 5; i++) {
-        columns.push(
-          `username_${i}`,
-          `host_${i}`,
-          `port_${i}`,
-          `password_${i}`,
-        );
+
+      // 1. Validation: Max 2 ongoing campaigns for the organization
+      const { data: orgOngoing, error: orgOngoingError } = await supabase
+        .from("email_campaigns")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("status", "Ongoing");
+
+      if (!orgOngoingError && orgOngoing && orgOngoing.length >= 2) {
+        setLaunchErrorType("max_campaigns");
+        setLaunchStatus("validation_error");
+        setIsLaunching(false);
+        return;
       }
 
-      const { data: orgData } = await supabase
+      // 2. Validation: No ongoing campaign on the same table
+      const { data: tableOngoing, error: tableOngoingError } = await supabase
+        .from("email_campaigns")
+        .select("id")
+        .eq("table_id", selectedTableId)
+        .eq("status", "Ongoing");
+
+      if (!tableOngoingError && tableOngoing && tableOngoing.length > 0) {
+        setLaunchErrorType("table_in_use");
+        setLaunchStatus("validation_error");
+        setIsLaunching(false);
+        return;
+      }
+
+      // 3. Update Campaign Stats & Metadata
+      const { error: campaignError } = await supabase
+        .from("email_campaigns")
+        .update({
+          status: "Ongoing",
+          start_time: new Date().toISOString(),
+          launcher_user_id: user?.id,
+        })
+        .eq("id", id);
+
+      if (campaignError) throw campaignError;
+
+      // 2. Increment Organization metrics
+      const { data: orgData, error: orgFetchError } = await supabase
         .from("organizations")
-        .select(
-          `username, host, port, password, ssl-tls-toggle, host_name, ${columns.join(", ")}`,
-        )
+        .select("campaigns_launched")
         .eq("org_id", orgId)
         .single();
 
-      const emailData = {
-        username: orgData?.username,
-        host: orgData?.host,
-        port: orgData?.port,
-        password: orgData?.password,
-        "ssl-tls-toggle": orgData?.["ssl-tls-toggle"],
-        hostname: orgData?.host_name,
-      };
+      if (orgFetchError) throw orgFetchError;
 
-      for (let i = 1; i <= 5; i++) {
-        if (orgData?.[`username_${i}`]) {
-          emailData[`username_${i}`] = orgData[`username_${i}`];
-          emailData[`host_${i}`] = orgData[`host_${i}`];
-          emailData[`port_${i}`] = orgData[`port_${i}`];
-          emailData[`password_${i}`] = orgData[`password_${i}`];
-        }
+      const { error: orgUpdateError } = await supabase
+        .from("organizations")
+        .update({ campaigns_launched: (orgData?.campaigns_launched || 0) + 1 })
+        .eq("org_id", orgId);
+
+      if (orgUpdateError) throw orgUpdateError;
+
+      // 5. Queue leads for the outreach engine
+      if (selectedTableId) {
+        const { error: leadsError } = await supabase
+          .from("leads")
+          .update({ status: "queued", campaign_id: parseInt(id) })
+          .eq("table_id", selectedTableId);
+
+        if (leadsError) throw leadsError;
       }
 
-      const response = await fetch(
-        process.env.NEXT_PUBLIC_N8N_EMAIL_PREVIEW_URL,
-        {
-          // Use same URL as requested
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "campaign",
-            campaign_id: id,
-            table_id: selectedTableId,
-            name: stripTimestamp(campaign?.campaign_name || ""),
-            org_id: orgId,
-            tone,
-            goal,
-            subject,
-            follow_ups: followUps,
-            delay_hours: delayHours,
-            include_risky: includeRisky,
-            ...emailData,
-          }),
-        },
-      );
-
-      if (response.ok) {
-        await supabase
-          .from("email_campaigns")
-          .update({ status: "Ongoing" })
-          .eq("id", id);
-
-        router.push("/dashboard/view-campaigns");
-      } else {
-        alert("Engine initialization failed. Please contact support.");
-      }
+      setLaunchStatus("success");
     } catch (err) {
       console.error("Launch error:", err);
-      alert("Failed to connect to the outreach engine.");
+      setLaunchStatus("failure");
     } finally {
       setIsLaunching(false);
     }
@@ -387,6 +388,31 @@ export default function CampaignSetupWizard() {
         </p>
       </div>
     );
+
+  if (campaign?.status === "Ongoing" || campaign?.status === "Completed") {
+    return (
+      <div className="flex flex-col items-center justify-center p-20 space-y-6 font-sans text-center h-[60vh]">
+        <div className="w-20 h-20 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center shadow-inner">
+          <FaLock size={32} />
+        </div>
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 mb-2">
+            Campaign Locked
+          </h2>
+          <p className="text-slate-500 font-medium max-w-md mx-auto">
+            This campaign has already been launched. You cannot modify its
+            configuration while it is {campaign.status.toLowerCase()}.
+          </p>
+        </div>
+        <button
+          onClick={() => router.push("/dashboard/view-campaigns")}
+          className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition-all text-sm"
+        >
+          Return to Campaigns
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-10 font-sans pb-20">
@@ -1082,6 +1108,202 @@ export default function CampaignSetupWizard() {
           </div>
         </div>
       </div>
+
+      {/* MODALS */}
+      <AnimatePresence>
+        {/* 1. Launch Confirmation Modal */}
+        {showLaunchConfirm && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-0">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowLaunchConfirm(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[3rem] shadow-2xl p-12 overflow-hidden border border-slate-100"
+            >
+              <div className="text-center space-y-6">
+                <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-3xl flex items-center justify-center mx-auto">
+                  <FaShieldAlt size={32} />
+                </div>
+                <div className="space-y-4">
+                  <h3 className="text-2xl font-black text-slate-900">
+                    Final Authorization
+                  </h3>
+                  <p className="text-slate-500 font-medium leading-relaxed">
+                    By clicking continue, you authorize <b>Lead Lev AI</b> to
+                    reach out to your identified prospects on behalf of your
+                    business. This will immediately activate your outreach
+                    strategy.
+                  </p>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
+                    <FaInfoCircle
+                      className="text-slate-400 shrink-0"
+                      size={14}
+                    />
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-left">
+                      Sequence is reversible. You can stop outreach at any time
+                      from the dashboard.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 pt-6">
+                  <button
+                    onClick={handleLaunch}
+                    disabled={isLaunching}
+                    className="w-full py-5 bg-slate-900 text-white rounded-2xl cursor-pointer font-black text-sm uppercase tracking-widest hover:bg-indigo-600 transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-100"
+                  >
+                    {isLaunching ? (
+                      <FaSpinner className="animate-spin" />
+                    ) : (
+                      <FaCheck size={14} />
+                    )}
+                    Initiate Campaign
+                  </button>
+                  <button
+                    onClick={() => router.push("/dashboard/view-campaigns")}
+                    className="w-full cursor-pointer py-5 text-slate-400 font-black text-[10px] uppercase tracking-[0.2em] hover:text-slate-900 transition-colors"
+                  >
+                    Cancel Setup
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 2. Success Modal */}
+        {launchStatus === "success" && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 sm:p-0">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="relative w-full max-w-xl bg-white rounded-[3.5rem] shadow-2xl p-16 overflow-hidden border border-slate-100 text-center"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500" />
+              <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-inner">
+                <FaCheckCircle size={40} />
+              </div>
+              <h3 className="text-4xl font-black text-slate-900 mb-4 tracking-tight">
+                Kicked Off!
+              </h3>
+              <p className="text-slate-500 font-medium text-lg leading-relaxed mb-12">
+                Your campaign has been successfully initialized. The AI Engine
+                is now warming up and will begin dispatching emails to your
+                leads shortly.
+              </p>
+
+              <div className="grid grid-cols-1 gap-4">
+                <button
+                  onClick={() => router.push("/dashboard/view-campaigns")}
+                  className="py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-800 transition-all flex items-center justify-center gap-3"
+                >
+                  Back to Campaigns
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 3. Failure Modal */}
+        {launchStatus === "failure" && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 sm:p-0">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="relative w-full max-w-xl bg-white rounded-[3.5rem] shadow-2xl p-16 overflow-hidden border border-slate-100 text-center"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-red-500" />
+              <div className="w-24 h-24 bg-red-50 text-red-500 rounded-[2rem] flex items-center justify-center mx-auto mb-8">
+                <FaExclamationTriangle size={40} />
+              </div>
+              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">
+                System Error
+              </h3>
+              <p className="text-slate-500 font-medium text-lg leading-relaxed mb-12">
+                Our outreach engine is currently having trouble processing your
+                request. This is usually temporary—please try again after a few
+                moments.
+              </p>
+
+              <button
+                onClick={() => setLaunchStatus(null)}
+                className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-800 transition-all"
+              >
+                Close & Return
+              </button>
+            </motion.div>
+          </div>
+        )}
+
+        {/* 4. Validation Error Modal */}
+        {launchStatus === "validation_error" && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 sm:p-0">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 bg-slate-900/80 backdrop-blur-xl"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="relative w-full max-w-xl bg-white rounded-[3.5rem] shadow-2xl p-16 overflow-hidden border border-slate-100 text-center"
+            >
+              <div className="absolute top-0 left-0 w-full h-2 bg-amber-500" />
+              <div className="w-24 h-24 bg-amber-50 text-amber-500 rounded-[2rem] flex items-center justify-center mx-auto mb-8">
+                <FaExclamationTriangle size={40} />
+              </div>
+              <h3 className="text-3xl font-black text-slate-900 mb-4 tracking-tight">
+                Cannot Launch Campaign
+              </h3>
+              <p className="text-slate-500 font-medium text-lg leading-relaxed mb-12">
+                {launchErrorType === "max_campaigns"
+                  ? "You already have 2 ongoing campaigns. You can only start another one once one of them is completed."
+                  : "There is already an ongoing campaign using the same Lead Collection. Please wait for it to complete or choose a different data source."}
+              </p>
+
+              <button
+                onClick={() => setLaunchStatus(null)}
+                className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-slate-800 transition-all"
+              >
+                Got It
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+// Helper to keep icons consistent if missing in scope
+const FaChartBar = ({ size, className }) => (
+  <svg
+    stroke="currentColor"
+    fill="currentColor"
+    strokeWidth="0"
+    viewBox="0 0 512 512"
+    height={size}
+    width={size}
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M504 384V448c0 8.8-7.2 16-16 16H24c-8.8 0-16-7.2-16-16V384c0-8.8 7.2-16 16-16h464c8.8 0 16 7.2 16 16zM464 64V336c0 8.8-7.2 16-16 16H336c-8.8 0-16-7.2-16-16V64c0-8.8 7.2-16 16-16h112c8.8 0 16 7.2 16 16zM304 160V336c0 8.8-7.2 16-16 16H176c-8.8 0-16-7.2-16-16V160c0-8.8 7.2-16 16-16H288c8.8 0 16 7.2 16 16zM144 256V336c0 8.8-7.2 16-16 16H16c-8.8 0-16-7.2-16-16V256c0-8.8 7.2-16 16-16h112c8.8 0 16 7.2 16 16z"></path>
+  </svg>
+);

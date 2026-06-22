@@ -95,11 +95,12 @@ export default function SettingsPage() {
   }, [orgId, clerkLoaded]);
 
   // Handle n8n Webhook Test
+  // Handle n8n Webhook Test
   const handleTestAndSave = async (e) => {
     e.preventDefault();
     setFormError("");
 
-    const portInt = parseInt(formData.port);
+    const portInt = parseInt(formData.port, 10); // Clear numerical radix base
     if (portInt !== 587 && portInt !== 465) {
       return setFormError("Only port numbers 587 and 465 are allowed.");
     }
@@ -107,16 +108,21 @@ export default function SettingsPage() {
       return setFormError("All fields are required.");
     }
 
+    // Explicitly map payload structure to enforce data schema rules
+    const cleanedPayload = {
+      username: formData.username,
+      password: formData.password,
+      host: formData.host,
+      port: portInt, // Enforces an integer data type assignment
+    };
+
     setIsTesting(true);
     try {
-      const testRes = await fetch(
-        "https://revlaunchdigital.app.n8n.cloud/webhook-test/60e35714-0d5d-41bc-8009-691f106c0298",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
-        },
-      );
+      const testRes = await fetch(process.env.NEXT_PUBLIC_N8N_EMAIL_TEST_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cleanedPayload), // <-- Use cleanedPayload here
+      });
 
       const testData = await testRes.json();
 
@@ -125,7 +131,7 @@ export default function SettingsPage() {
         const saveRes = await fetch("/api/organizations/password", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orgId, ...formData }),
+          body: JSON.stringify({ orgId, ...cleanedPayload }), // <-- Enforces clean data in database too
         });
 
         if (!saveRes.ok) {
@@ -135,7 +141,7 @@ export default function SettingsPage() {
 
         setShowResultModal("success");
         setShowAddForm(false);
-        setFormData({ username: "", password: "", host: "", port: "587" });
+        setFormData({ username: "", password: "", host: "", port: 587 });
         await checkPasswordStatus();
       } else {
         setShowResultModal("failure");
@@ -183,19 +189,16 @@ export default function SettingsPage() {
       }
 
       // Step 2: Run n8n test with NEW credentials
-      const testRes = await fetch(
-        "https://revlaunchdigital.app.n8n.cloud/webhook-test/60e35714-0d5d-41bc-8009-691f106c0298",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: currentConfig.username,
-            password: changePasswords.new,
-            host: currentConfig.host,
-            port: currentConfig.port,
-          }),
-        },
-      );
+      const testRes = await fetch(process.env.NEXT_PUBLIC_N8N_EMAIL_TEST_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: currentConfig.username,
+          password: changePasswords.new,
+          host: currentConfig.host,
+          port: currentConfig.port,
+        }),
+      });
 
       const testData = await testRes.json();
 
@@ -668,6 +671,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+              {/* Secure Port Input Block */}
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1">
                   Secure Port
@@ -678,7 +682,10 @@ export default function SettingsPage() {
                     placeholder="587"
                     value={formData.port}
                     onChange={(e) =>
-                      setFormData({ ...formData, port: e.target.value })
+                      setFormData({
+                        ...formData,
+                        port: Number(e.target.value),
+                      })
                     }
                     className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-6 py-4 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-black"
                   />

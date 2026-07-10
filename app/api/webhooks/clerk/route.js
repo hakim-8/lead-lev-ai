@@ -12,6 +12,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY,
 ); // Must use Service Role to bypass RLS during webhook updates
 
+// --- FAILSAFE UTILITY ---
+// Helper function to handle async pauses to let concurrent threads settle
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function POST(req) {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
   if (!WEBHOOK_SECRET)
@@ -96,7 +100,7 @@ export async function POST(req) {
 // INTERCEPT & ROUTING HANDLER FUNCTIONS
 // =========================================================================
 
-// Handles initial organization setup and logs the creator inside the memberships table
+// Handles initial organization setup with built-in race condition handling
 async function handleCreateOrganization(data) {
   const creatorId = data.created_by || null;
 
@@ -117,6 +121,43 @@ async function handleCreateOrganization(data) {
 
   // 2. If a creator exists, pair them to the org and initialize them inside both tables
   if (creatorId) {
+    let userExists = false;
+    let retries = 3;
+
+    // --- THE FAILSAFE LOOP ---
+    // Actively polls Supabase to check if the concurrent user.created webhook thread finished committing
+    while (retries > 0 && !userExists) {
+      const { data: userCheck } = await supabase
+        .from("users")
+        .select("clerk_id")
+        .eq("clerk_id", creatorId)
+        .maybeSingle();
+
+      if (userCheck) {
+        userExists = true;
+      } else {
+        retries--;
+        console.log(
+          `User row not found yet for ${creatorId}. Retrying in 500ms... (Attempts left: ${retries})`,
+        );
+        await delay(500); // Wait 500ms for database to settle
+      }
+    }
+
+    // Baseline fallback stub creation to preserve table foreign key constraints if network stalls completely
+    if (!userExists) {
+      console.warn(
+        `User row missing after retries. Creating baseline fallback stub for ${creatorId}.`,
+      );
+      await supabase.from("users").insert({
+        clerk_id: creatorId,
+        email: "",
+        first_name: "",
+        last_name: "",
+      });
+    }
+
+    // 3. Cleanly assign organizational mapping values onto user core account row
     const { error: userError } = await supabase
       .from("users")
       .update({
@@ -128,10 +169,10 @@ async function handleCreateOrganization(data) {
 
     if (userError) throw userError;
 
-    // 3. Populate matching junction link in memberships table using Clerk's data structural properties
+    // 4. Populate matching junction link in memberships table safely
     const cleanRole = "admin";
     const { error: memError } = await supabase.from("memberships").insert({
-      member_id: `mem_creator_${data.id}`, // Custom string fallback for creator tracking since membershipId isn't sent in org.created
+      member_id: `mem_creator_${data.id}`,
       user_id: creatorId,
       org_id: data.id,
       role: cleanRole,

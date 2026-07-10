@@ -1,0 +1,298 @@
+import { Webhook } from "svix";
+import { headers } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
+import { createClerkClient } from "@clerk/backend";
+
+// Initialize SDK clients
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+});
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY,
+); // Must use Service Role to bypass RLS during webhook updates
+
+export async function POST(req) {
+  const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
+  if (!WEBHOOK_SECRET)
+    return new Response("Missing webhook secret", { status: 500 });
+
+  // 1. Extract Svix headers for signature verification
+  const headerPayload = await headers();
+  const svix_id = headerPayload.get("svix-id");
+  const svix_timestamp = headerPayload.get("svix-timestamp");
+  const svix_signature = headerPayload.get("svix-signature");
+
+  if (!svix_id || !svix_timestamp || !svix_signature) {
+    return new Response("Missing svix headers", { status: 400 });
+  }
+
+  const payload = await req.json();
+  const body = JSON.stringify(payload);
+  const wh = new Webhook(WEBHOOK_SECRET);
+  let evt;
+
+  try {
+    evt = wh.verify(body, {
+      "svix-id": svix_id,
+      "svix-timestamp": svix_timestamp,
+      "svix-signature": svix_signature,
+    });
+  } catch (err) {
+    console.error("Webhook verification failed:", err);
+    return new Response("Invalid signature", { status: 400 });
+  }
+
+  const { type, data } = evt;
+
+  // 2. Main Router Loop
+  try {
+    switch (type) {
+      // --- ORGANIZATION EVENTS ---
+      case "organization.created":
+        await handleCreateOrganization(data);
+        break;
+      case "organization.updated":
+        await handleUpdateOrganization(data);
+        break;
+      case "organization.deleted":
+        await handleDeleteOrganization(data);
+        break;
+
+      // --- USER ACCOUNT EVENTS ---
+      case "user.created":
+      case "user.updated":
+        await handleUpsertUserAccount(data);
+        break;
+      case "user.deleted":
+        await handleDeleteUserAccount(data);
+        break;
+
+      // --- MEMBERSHIP ROLING & SEAT ENFORCEMENT ---
+      case "organizationMembership.created":
+        await handleCreateMembership(data);
+        break;
+      case "organizationMembership.updated":
+        await handleUpdateMembership(data);
+        break;
+      case "organizationMembership.deleted":
+        await handleDeleteMembership(data);
+        break;
+
+      default:
+        console.log(`Unhandled webhook event type: ${type}`);
+    }
+
+    return new Response("Webhook processed successfully", { status: 200 });
+  } catch (error) {
+    console.error(`Error processing event ${type}:`, error);
+    return new Response("Internal Server Error processing webhook", {
+      status: 500,
+    });
+  }
+}
+
+// =========================================================================
+// INTERCEPT & ROUTING HANDLER FUNCTIONS
+// =========================================================================
+
+// Handles initial organization setup and logs the creator inside the memberships table
+async function handleCreateOrganization(data) {
+  const creatorId = data.created_by || null;
+
+  // 1. Insert the new organization profile row
+  const { error: orgError } = await supabase.from("organizations").insert({
+    org_id: data.id,
+    org_name: data.name,
+    creator_user_id: creatorId,
+    members: 1,
+    credits: 0,
+    subscription_type: "Free",
+    subscription_status: "inactive",
+    max_seats: 1,
+    subscription_end: null,
+  });
+
+  if (orgError) throw orgError;
+
+  // 2. If a creator exists, pair them to the org and initialize them inside both tables
+  if (creatorId) {
+    const { error: userError } = await supabase
+      .from("users")
+      .update({
+        org_id: data.id,
+        org_name: data.name,
+        role: "admin",
+      })
+      .eq("clerk_id", creatorId);
+
+    if (userError) throw userError;
+
+    // 3. Populate matching junction link in memberships table using Clerk's data structural properties
+    const cleanRole = "admin";
+    const { error: memError } = await supabase.from("memberships").insert({
+      member_id: `mem_creator_${data.id}`, // Custom string fallback for creator tracking since membershipId isn't sent in org.created
+      user_id: creatorId,
+      org_id: data.id,
+      role: cleanRole,
+    });
+
+    if (memError) throw memError;
+  }
+}
+
+// Handles updating an organization's changeable attributes safely
+async function handleUpdateOrganization(data) {
+  const { error } = await supabase
+    .from("organizations")
+    .update({
+      org_name: data.name,
+    })
+    .eq("org_id", data.id);
+
+  if (error) throw error;
+}
+
+// Handles removing an organization completely from the table
+async function handleDeleteOrganization(data) {
+  const { error } = await supabase
+    .from("organizations")
+    .delete()
+    .eq("org_id", data.id);
+
+  if (error) throw error;
+}
+
+// Enforces limits based on memberships counts and tracks user pairs in the memberships table
+async function handleCreateMembership(data) {
+  const orgId = data.organization.id;
+  const userId = data.public_user_data.user_id;
+  const rawRole = data.role;
+  const membershipId = data.id;
+
+  // 1. Pull the max seat threshold configured for this specific organization
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("max_seats")
+    .eq("org_id", orgId)
+    .single();
+
+  const maxSeatsAllowed = org?.max_seats || 1;
+
+  // 2. Compute how many users currently belong to this organization using the memberships table
+  const { count } = await supabase
+    .from("memberships")
+    .select("*", { count: "exact", head: true })
+    .eq("org_id", orgId);
+
+  // 3. SEAT CHECK BREAKOUT (Revoke Pattern)
+  if (count >= maxSeatsAllowed) {
+    console.warn(
+      `Org ${orgId} hit seat ceiling (${maxSeatsAllowed}). Booting user ${userId}.`,
+    );
+
+    await clerkClient.organizations.deleteOrganizationMembership({
+      organizationId: orgId,
+      membershipId: membershipId,
+    });
+    return;
+  }
+
+  const cleanRole = rawRole.replace("org:", "");
+
+  // 4. Update the user record to associate them with the active organization
+  const { error: userUpdateError } = await supabase
+    .from("users")
+    .update({
+      org_id: orgId,
+      org_name: data.organization.name,
+      role: cleanRole,
+    })
+    .eq("clerk_id", userId);
+
+  if (userUpdateError) throw userUpdateError;
+
+  // 5. Add a matching tracking link row to your memberships table
+  const { error: membershipError } = await supabase.from("memberships").insert({
+    member_id: membershipId,
+    user_id: userId,
+    org_id: orgId,
+    role: cleanRole,
+  });
+
+  if (membershipError) throw membershipError;
+}
+
+// Matches by user_id and org_id to modify authorization flags seamlessly
+async function handleUpdateMembership(data) {
+  const orgId = data.organization.id;
+  const userId = data.public_user_data.user_id;
+  const rawRole = data.role;
+  const cleanRole = rawRole.replace("org:", "");
+
+  // Update root profile record
+  await supabase
+    .from("users")
+    .update({ role: cleanRole })
+    .match({ clerk_id: userId, org_id: orgId });
+
+  // Update membership junction configuration
+  const { error } = await supabase
+    .from("memberships")
+    .update({ role: cleanRole })
+    .match({ user_id: userId, org_id: orgId });
+
+  if (error) throw error;
+}
+
+// Drops row from memberships table entirely when connection link is revoked
+async function handleDeleteMembership(data) {
+  const orgId = data.organization.id;
+  const userId = data.public_user_data.user_id;
+
+  // Re-initialize core user account profile defaults back to baseline states
+  await supabase
+    .from("users")
+    .update({
+      org_id: null,
+      org_name: null,
+      role: "member",
+    })
+    .eq("clerk_id", userId);
+
+  // Safely delete tracking link execution row from memberships table
+  const { error } = await supabase
+    .from("memberships")
+    .delete()
+    .match({ user_id: userId, org_id: orgId });
+
+  if (error) throw error;
+}
+
+// Handles user account base configuration without stripping existing organization mapping details
+async function handleUpsertUserAccount(data) {
+  const primaryEmail = data.email_addresses?.find(
+    (email) => email.id === data.primary_email_address_id,
+  )?.email_address;
+
+  const { error } = await supabase.from("users").upsert(
+    {
+      clerk_id: data.id,
+      email: primaryEmail || "",
+      first_name: data.first_name || "",
+      last_name: data.last_name || "",
+    },
+    { onConflict: "clerk_id" },
+  );
+
+  if (error) throw error;
+}
+
+// Handles removing a user profile completely
+async function handleDeleteUserAccount(data) {
+  const { error } = await supabase
+    .from("users")
+    .delete()
+    .eq("clerk_id", data.id);
+  if (error) throw error;
+}

@@ -119,13 +119,11 @@ async function handleCreateOrganization(data) {
 
   if (orgError) throw orgError;
 
-  // 2. If a creator exists, pair them to the org and initialize them inside both tables
+  // 2. If a creator exists, manage the user race condition check before mapping to memberships
   if (creatorId) {
     let userExists = false;
     let retries = 3;
 
-    // --- THE FAILSAFE LOOP ---
-    // Actively polls Supabase to check if the concurrent user.created webhook thread finished committing
     while (retries > 0 && !userExists) {
       const { data: userCheck } = await supabase
         .from("users")
@@ -138,17 +136,13 @@ async function handleCreateOrganization(data) {
       } else {
         retries--;
         console.log(
-          `User row not found yet for ${creatorId}. Retrying in 500ms... (Attempts left: ${retries})`,
+          `User row not found yet for ${creatorId}. Retrying in 500ms...`,
         );
-        await delay(500); // Wait 500ms for database to settle
+        await delay(500);
       }
     }
 
-    // Baseline fallback stub creation to preserve table foreign key constraints if network stalls completely
     if (!userExists) {
-      console.warn(
-        `User row missing after retries. Creating baseline fallback stub for ${creatorId}.`,
-      );
       await supabase.from("users").insert({
         clerk_id: creatorId,
         email: "",
@@ -157,19 +151,7 @@ async function handleCreateOrganization(data) {
       });
     }
 
-    // 3. Cleanly assign organizational mapping values onto user core account row
-    const { error: userError } = await supabase
-      .from("users")
-      .update({
-        org_id: data.id,
-        org_name: data.name,
-        role: "admin",
-      })
-      .eq("clerk_id", creatorId);
-
-    if (userError) throw userError;
-
-    // 4. Populate matching junction link in memberships table safely
+    // 3. Populate matching junction link in memberships table safely
     const cleanRole = "admin";
     const { error: memError } = await supabase.from("memberships").insert({
       member_id: `mem_creator_${data.id}`,
@@ -241,19 +223,7 @@ async function handleCreateMembership(data) {
 
   const cleanRole = rawRole.replace("org:", "");
 
-  // 4. Update the user record to associate them with the active organization
-  const { error: userUpdateError } = await supabase
-    .from("users")
-    .update({
-      org_id: orgId,
-      org_name: data.organization.name,
-      role: cleanRole,
-    })
-    .eq("clerk_id", userId);
-
-  if (userUpdateError) throw userUpdateError;
-
-  // 5. Add a matching tracking link row to your memberships table
+  // 4. Add a matching tracking link row to your memberships table exclusively
   const { error: membershipError } = await supabase.from("memberships").insert({
     member_id: membershipId,
     user_id: userId,
@@ -271,13 +241,7 @@ async function handleUpdateMembership(data) {
   const rawRole = data.role;
   const cleanRole = rawRole.replace("org:", "");
 
-  // Update root profile record
-  await supabase
-    .from("users")
-    .update({ role: cleanRole })
-    .match({ clerk_id: userId, org_id: orgId });
-
-  // Update membership junction configuration
+  // Update membership junction configuration exclusively
   const { error } = await supabase
     .from("memberships")
     .update({ role: cleanRole })
@@ -291,17 +255,7 @@ async function handleDeleteMembership(data) {
   const orgId = data.organization.id;
   const userId = data.public_user_data.user_id;
 
-  // Re-initialize core user account profile defaults back to baseline states
-  await supabase
-    .from("users")
-    .update({
-      org_id: null,
-      org_name: null,
-      role: "member",
-    })
-    .eq("clerk_id", userId);
-
-  // Safely delete tracking link execution row from memberships table
+  // Safely delete tracking link execution row from memberships table exclusively
   const { error } = await supabase
     .from("memberships")
     .delete()

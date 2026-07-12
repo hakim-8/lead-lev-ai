@@ -102,6 +102,7 @@ export async function POST(req) {
 // Handles initial organization setup with built-in race condition handling
 async function handleCreateOrganization(data) {
   const creatorId = data.created_by || null;
+  const FREE_TIER_SEAT_LIMIT = 2;
 
   // 1. Insert the new organization profile row
   const { error: orgError } = await supabase.from("organizations").insert({
@@ -112,11 +113,27 @@ async function handleCreateOrganization(data) {
     credits: 0,
     subscription_type: "Free",
     subscription_status: "inactive",
-    max_seats: 1,
+    max_seats: FREE_TIER_SEAT_LIMIT,
     subscription_end: null,
   });
 
   if (orgError) throw orgError;
+
+  // 1b. Enforce the seat cap in Clerk itself, so Clerk blocks invites/joins
+  // beyond the limit before they ever happen — real-time error to the user,
+  // no need to revoke memberships after the fact via webhook.
+  try {
+    await clerkClient.organizations.updateOrganization(data.id, {
+      maxAllowedMemberships: FREE_TIER_SEAT_LIMIT,
+    });
+  } catch (clerkErr) {
+    console.error(
+      `Failed to set maxAllowedMemberships for org ${data.id}:`,
+      clerkErr,
+    );
+    // Not fatal to the webhook — the org still exists, just uncapped in
+    // Clerk until this is retried or fixed manually.
+  }
 
   // 2. If a creator exists, manage the user race condition check before mapping to memberships
   if (creatorId) {
@@ -149,17 +166,6 @@ async function handleCreateOrganization(data) {
         last_name: "",
       });
     }
-
-    // 3. Populate matching junction link in memberships table safely
-    const cleanRole = "admin";
-    const { error: memError } = await supabase.from("memberships").insert({
-      member_id: `mem_creator_${data.id}`,
-      user_id: creatorId,
-      org_id: data.id,
-      role: cleanRole,
-    });
-
-    if (memError) throw memError;
   }
 }
 
@@ -191,38 +197,11 @@ async function handleCreateMembership(data) {
   const userId = data.public_user_data.user_id;
   const rawRole = data.role;
   const membershipId = data.id;
+  const cleanRole = rawRole?.replace("org:", "") || "member";
 
-  // 1. Pull the max seat threshold configured for this specific organization
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("max_seats")
-    .eq("org_id", orgId)
-    .single();
-
-  const maxSeatsAllowed = org?.max_seats || 1;
-
-  // 2. Compute how many users currently belong to this organization using the memberships table
-  const { count } = await supabase
-    .from("memberships")
-    .select("*", { count: "exact", head: true })
-    .eq("org_id", orgId);
-
-  // 3. SEAT CHECK BREAKOUT (Revoke Pattern)
-  if (count >= maxSeatsAllowed) {
-    console.warn(
-      `Org ${orgId} hit seat ceiling (${maxSeatsAllowed}). Booting user ${userId}.`,
-    );
-
-    await clerkClient.organizations.deleteOrganizationMembership({
-      organizationId: orgId,
-      membershipId: membershipId,
-    });
-    return;
-  }
-
-  const cleanRole = rawRole.replace("org:", "");
-
-  // 4. Add a matching tracking link row to your memberships table exclusively
+  // Clerk's maxAllowedMemberships setting already blocked this membership
+  // from being created if the org was over its seat limit — so by the time
+  // this webhook fires, the join was already allowed. Just record it.
   const { error: membershipError } = await supabase.from("memberships").insert({
     member_id: membershipId,
     user_id: userId,

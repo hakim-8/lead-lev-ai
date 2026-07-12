@@ -185,7 +185,7 @@ export default function SignUpPage() {
         <SignUp
           path="/sign-up"
           routing="path"
-          forceRedirectUrl="/oboarding"
+          forceRedirectUrl="/onboarding"
           appearance={{
             variables: {
               colorPrimary: "#4f46e5",

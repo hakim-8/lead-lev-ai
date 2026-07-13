@@ -10,6 +10,9 @@ import {
   FaCheckCircle,
   FaExclamationTriangle,
   FaEnvelope,
+  FaBuilding,
+  FaBriefcase,
+  FaUsers,
 } from "react-icons/fa";
 import {
   Eye,
@@ -21,16 +24,29 @@ import {
   ShieldCheck,
   Mail,
   ArrowRight,
+  Building,
+  Users,
+  CreditCard,
+  Calendar,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
+import { supabase } from "../../lib/supabase";
 
 export default function SettingsPage() {
-  const { orgId, isLoaded: clerkLoaded } = useAuth();
+  const { orgId, userId, isLoaded: clerkLoaded } = useAuth();
 
   const [configs, setConfigs] = useState([]);
   const [hasLegacyPassword, setHasLegacyPassword] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
+
+  // Layout state
+  const [activeTab, setActiveTab] = useState("emails");
+
+  // Profile states
+  const [orgData, setOrgData] = useState(null);
+  const [businessContext, setBusinessContext] = useState("");
+  const [isSavingContext, setIsSavingContext] = useState(false);
 
   // Modal States
   const [showAddForm, setShowAddForm] = useState(false);
@@ -73,10 +89,69 @@ export default function SettingsPage() {
     setTimeout(() => setStatus({ message: "", isError: false }), 5000);
   };
 
+  const formatEAT = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "Africa/Nairobi",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date) + " EAT";
+  };
+
+  async function fetchOrgData() {
+    if (!orgId) return;
+    try {
+      const { data, error } = await supabase
+        .from("organizations")
+        .select("*")
+        .eq("org_id", orgId)
+        .single();
+      if (data) {
+        setOrgData(data);
+        setBusinessContext(data.business_context || "");
+      }
+    } catch (err) {
+      console.error("Error fetching org data:", err);
+    }
+  }
+
+  const handleSaveContext = async () => {
+    setIsSavingContext(true);
+    try {
+      const { error } = await supabase
+        .from("organizations")
+        .update({ business_context: businessContext })
+        .eq("org_id", orgId);
+        
+      if (error) throw error;
+      
+      triggerMessage("Business context updated successfully.");
+      
+      // log action
+      await supabase.from("actions").insert({
+        user_id: userId,
+        org_id: orgId,
+        action: `updated business context`,
+        credits_used: 0
+      });
+      
+      await fetchOrgData();
+    } catch (err) {
+      triggerMessage(err.message || "Failed to update context", true);
+    } finally {
+      setIsSavingContext(false);
+    }
+  };
+
   async function checkPasswordStatus() {
     if (!clerkLoaded || !orgId) return;
     try {
       setLoadingData(true);
+      await fetchOrgData();
       const res = await fetch(`/api/organizations/password?orgId=${orgId}`);
       const data = await res.json();
       if (res.ok) {
@@ -138,6 +213,14 @@ export default function SettingsPage() {
           const saveData = await saveRes.json();
           throw new Error(saveData.error || "Failed to save configuration");
         }
+
+        // Log action
+        await supabase.from("actions").insert({
+          user_id: userId,
+          org_id: orgId,
+          action: `added ${formData.username} to outreach list`,
+          credits_used: 0,
+        });
 
         setShowResultModal("success");
         setShowAddForm(false);
@@ -243,6 +326,10 @@ export default function SettingsPage() {
     e.preventDefault();
     if (!deletePassword) return;
 
+    // Capture the email before it's deleted
+    const configToDelete = configs.find((c) => c.index === deletingIndex);
+    const deletedEmail = configToDelete ? configToDelete.username : "email";
+
     setDeleteModalError("");
     setIsDeleting(true);
     try {
@@ -258,6 +345,14 @@ export default function SettingsPage() {
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error || "Deletion failed");
+
+      // Log action
+      await supabase.from("actions").insert({
+        user_id: userId,
+        org_id: orgId,
+        action: `removed ${deletedEmail} from outreach list`,
+        credits_used: 0,
+      });
 
       triggerMessage("Email configuration removed successfully.");
       setDeletingIndex(null);
@@ -283,16 +378,42 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 px-4 pb-20">
+      {/* Tab Navigation */}
+      <div className="flex gap-6 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab("profile")}
+          className={`pb-4 text-sm font-black uppercase tracking-widest transition-all border-b-2 ${
+            activeTab === "profile"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          Organization Profile
+        </button>
+        <button
+          onClick={() => setActiveTab("emails")}
+          className={`pb-4 text-sm font-black uppercase tracking-widest transition-all border-b-2 ${
+            activeTab === "emails"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          Email Configurations
+        </button>
+      </div>
+
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">
             Settings
           </h1>
           <p className="text-slate-500 font-medium">
-            Manage your SMTP outreach configurations.
+            {activeTab === "emails"
+              ? "Manage your SMTP outreach configurations."
+              : "Manage your organization details and AI context."}
           </p>
         </div>
-        {!showAddForm && (
+        {activeTab === "emails" && !showAddForm && (
           <button
             onClick={() => setShowAddForm(true)}
             disabled={configs.length >= 5}
@@ -310,7 +431,7 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {configs.length >= 5 && !showAddForm && (
+      {activeTab === "emails" && configs.length >= 5 && !showAddForm && (
         <div className="bg-amber-50 border border-amber-100 p-4 rounded-2xl flex items-center gap-3 text-amber-700 text-xs font-bold animate-in fade-in slide-in-from-top-2">
           <FaExclamationTriangle size={16} />
           <span>
@@ -337,8 +458,109 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Organization Profile Tab */}
+      {activeTab === "profile" && orgData && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* General Info Card */}
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                  <FaBuilding size={16} />
+                </div>
+                <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">
+                  General Info
+                </h3>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-2 border-b border-slate-50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Organization Name</span>
+                  <span className="text-sm font-black text-slate-700">{orgData.org_name}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company Type</span>
+                  <span className="text-sm font-black text-slate-700">{orgData.company_type || "N/A"}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Employees</span>
+                  <span className="text-sm font-black text-slate-700">{orgData.number_of_employees || "N/A"}</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Members</span>
+                  <span className="text-sm font-black text-slate-700">{orgData.members}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Subscription Card */}
+            <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-4">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                  <CreditCard size={20} />
+                </div>
+                <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">
+                  Subscription
+                </h3>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-2 border-b border-slate-50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Type</span>
+                  <span className="text-sm font-black text-slate-700">{orgData.subscription_type || "N/A"}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b border-slate-50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</span>
+                  <span className="text-sm font-black text-slate-700 capitalize">{orgData.subscription_status || "N/A"}</span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ends On</span>
+                  <span className="text-sm font-black text-slate-700">{formatEAT(orgData.subscription_end)}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Business Context Section */}
+          <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm space-y-4">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
+                <FaBriefcase size={16} />
+              </div>
+              <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">
+                Business Context
+              </h3>
+            </div>
+            
+            <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex items-start gap-3 text-amber-800 text-xs font-medium">
+              <FaExclamationTriangle size={16} className="mt-0.5 shrink-0" />
+              <p>
+                <strong>IMPORTANT:</strong> The business context provided below is used by our AI when generating reports and determining the best approach during AI-powered email campaigns. Please ensure it accurately reflects your company's offerings and tone.
+              </p>
+            </div>
+
+            <textarea
+              value={businessContext}
+              onChange={(e) => setBusinessContext(e.target.value)}
+              placeholder="Describe your business..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-medium min-h-[150px] resize-y"
+            />
+            
+            <div className="flex justify-end">
+              <button
+                onClick={handleSaveContext}
+                disabled={isSavingContext || businessContext === orgData.business_context}
+                className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-slate-900 transition-all shadow-md disabled:bg-slate-200 disabled:text-slate-400 flex items-center gap-2 uppercase tracking-widest"
+              >
+                {isSavingContext && <Loader2 size={14} className="animate-spin" />}
+                {isSavingContext ? "Saving..." : "Save Context"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Existing Configs List */}
-      <div className="grid grid-cols-1 gap-4">
+      {activeTab === "emails" && (
+      <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
         {configs.map((cfg) => (
           <div
             key={cfg.index}
@@ -575,6 +797,7 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+      )}
 
       {/* Add Email Form */}
       {showAddForm && (

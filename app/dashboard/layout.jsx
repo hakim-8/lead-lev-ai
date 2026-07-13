@@ -22,7 +22,7 @@ import {
   FaCoins, // Added for Credits icon
   FaBook,
 } from "react-icons/fa";
-import { UserButton, useClerk } from "@clerk/nextjs";
+import { UserButton, OrganizationSwitcher, useClerk } from "@clerk/nextjs";
 
 export default function DashboardLayout({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -184,6 +184,27 @@ export default function DashboardLayout({ children }) {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Organization Switcher */}
+        <div className="px-4 pt-4">
+          <OrganizationSwitcher
+            hidePersonal={false}
+            afterSelectOrganizationUrl="/dashboard"
+            afterSelectPersonalUrl="/dashboard"
+            appearance={{
+              elements: {
+                rootBox: "w-full",
+                organizationSwitcherTrigger:
+                  "w-full flex items-center justify-between bg-slate-50 border border-slate-100 rounded-2xl px-3 py-2.5 hover:bg-slate-100 transition-colors",
+                organizationSwitcherTriggerIcon: "text-slate-400",
+                organizationPreviewMainIdentifier:
+                  "text-xs font-bold text-slate-900",
+                organizationPreviewSecondaryIdentifier:
+                  "text-[10px] text-slate-500",
+              },
+            }}
+          />
         </div>
 
         {/* User Footer - Moved UserButton here */}

@@ -82,6 +82,14 @@ export default function NewCampaignPage() {
 
       if (insertError) throw insertError;
 
+      // Log action
+      await supabase.from("actions").insert({
+        user_id: user?.id,
+        org_id: orgId,
+        action: `created campaign ${finalName}`,
+        credits_used: 0,
+      });
+
       // 4. Redirect to dynamic setup page
       router.push(`/dashboard/view-campaigns/${data.id}`);
     } catch (err) {

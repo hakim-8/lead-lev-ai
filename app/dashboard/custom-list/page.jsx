@@ -72,6 +72,14 @@ export default function CustomListPage() {
 
       if (insertError) throw insertError;
 
+      // Log action
+      await supabase.from("actions").insert({
+        user_id: user?.id,
+        org_id: orgId,
+        action: `created custom list ${finalTableName}`,
+        credits_used: 0,
+      });
+
       // Success - Redirect to the new dynamic list page
       router.push(`/dashboard/view-leads/${data.id}`);
     } catch (err) {

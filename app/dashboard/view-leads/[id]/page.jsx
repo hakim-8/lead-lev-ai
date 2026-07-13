@@ -41,8 +41,12 @@ export default function LeadDetailsPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCampaign, setActiveCampaign] = useState(false);
-  const [feedback, setFeedback] = useState({ isOpen: false, type: "success", message: "" });
-  
+  const [feedback, setFeedback] = useState({
+    isOpen: false,
+    type: "success",
+    message: "",
+  });
+
   const showFeedback = (type, message) => {
     setFeedback({ isOpen: true, type, message });
     setTimeout(() => {
@@ -99,7 +103,7 @@ export default function LeadDetailsPage() {
         .select("id")
         .eq("table_id", id)
         .eq("status", "Ongoing");
-      
+
       if (data && data.length > 0) setActiveCampaign(true);
     } catch (err) {
       console.error("Error fetching active campaign:", err);
@@ -165,7 +169,8 @@ export default function LeadDetailsPage() {
       const activeTableIds = activeCampaigns?.map((c) => c.table_id) || [];
 
       // 3. Filter data
-      const filteredData = data?.filter((t) => !activeTableIds.includes(t.id)) || [];
+      const filteredData =
+        data?.filter((t) => !activeTableIds.includes(t.id)) || [];
 
       setAvailableTables(filteredData);
     } catch (err) {
@@ -226,6 +231,14 @@ export default function LeadDetailsPage() {
         .update({ number_of_leads: newCount })
         .eq("id", id);
 
+      // Log action
+      await supabase.from("actions").insert({
+        user_id: user?.id,
+        org_id: organization?.id || null,
+        action: `${selectedLeadIds.length} deleted from ${stripTimestamp(tableName)} table`,
+        credits_used: 0,
+      });
+
       setLeads((prev) => prev.filter((l) => !selectedLeadIds.includes(l.id)));
       setSelectedLeadIds([]);
       showFeedback("success", "Leads deleted successfully.");
@@ -239,6 +252,8 @@ export default function LeadDetailsPage() {
 
   const handleBulkTransfer = async () => {
     if (!targetTableId || selectedLeadIds.length === 0) return;
+
+    const destinationTable = availableTables.find((t) => t.id === targetTableId)?.table_name || "another";
 
     setIsProcessingBulk(true);
     try {
@@ -279,6 +294,14 @@ export default function LeadDetailsPage() {
         .from("lead_tables")
         .update({ number_of_leads: newDestCount })
         .eq("id", targetTableId);
+
+      // Log action
+      await supabase.from("actions").insert({
+        user_id: user?.id,
+        org_id: organization?.id || null,
+        action: `${selectedLeadIds.length} transferred from ${stripTimestamp(tableName)} to ${stripTimestamp(destinationTable)}`,
+        credits_used: 0,
+      });
 
       setLeads((prev) => prev.filter((l) => !selectedLeadIds.includes(l.id)));
       setSelectedLeadIds([]);
@@ -358,7 +381,7 @@ export default function LeadDetailsPage() {
     setIsModalOpen(true);
   };
 
-  const handleVerifyEmails = async () => {
+  const handleVerifyEmails = async (count) => {
     setIsVerifying(true);
     try {
       const response = await fetch(
@@ -374,6 +397,17 @@ export default function LeadDetailsPage() {
       );
 
       if (response.ok) {
+        const { error: actionError } = await supabase.from("actions").insert({
+          user_id: user?.id,
+          org_id: organization?.id || null,
+          action: `verified ${count} emails`,
+          credits_used: count,
+        });
+
+        if (actionError) {
+          console.error("Error inserting action:", actionError);
+        }
+
         // Give it a moment for the background process to settle if needed
         setTimeout(fetchLeads, 1500);
       } else {
@@ -482,6 +516,12 @@ export default function LeadDetailsPage() {
         .includes(searchTerm.toLowerCase()),
   );
 
+  const leadsToVerifyCount = leads.filter(
+    (lead) =>
+      lead.email_validity === "untested" &&
+      (lead.business_email || lead.decision_maker_email),
+  ).length;
+
   const getValidityBadge = (validity) => {
     const val = validity?.toLowerCase();
     if (val === "valid")
@@ -528,8 +568,8 @@ export default function LeadDetailsPage() {
             animate={{ opacity: 1, y: 0, x: "-50%" }}
             exit={{ opacity: 0, y: -20, x: "-50%" }}
             className={`fixed top-6 left-1/2 z-[200] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-xl font-sans ${
-              feedback.type === "success" 
-                ? "bg-emerald-900 border border-emerald-800 text-white" 
+              feedback.type === "success"
+                ? "bg-emerald-900 border border-emerald-800 text-white"
                 : "bg-red-900 border border-red-800 text-white"
             }`}
           >
@@ -539,13 +579,17 @@ export default function LeadDetailsPage() {
               <FaExclamationTriangle className="text-red-400" size={20} />
             )}
             <div className="flex flex-col">
-              <span className={`text-[10px] uppercase font-black tracking-widest ${feedback.type === "success" ? "text-emerald-400" : "text-red-400"}`}>
+              <span
+                className={`text-[10px] uppercase font-black tracking-widest ${feedback.type === "success" ? "text-emerald-400" : "text-red-400"}`}
+              >
                 {feedback.type === "success" ? "Success" : "Error"}
               </span>
               <span className="text-sm font-bold">{feedback.message}</span>
             </div>
-            <button 
-              onClick={() => setFeedback(prev => ({ ...prev, isOpen: false }))}
+            <button
+              onClick={() =>
+                setFeedback((prev) => ({ ...prev, isOpen: false }))
+              }
               className={`ml-4 p-2 hover:bg-white/10 rounded-xl transition-colors ${feedback.type === "success" ? "text-emerald-300" : "text-red-300"}`}
             >
               <FaTimes size={14} />
@@ -600,11 +644,19 @@ export default function LeadDetailsPage() {
       {/* Campaign Lock Banner */}
       {activeCampaign && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 flex items-start gap-4">
-          <FaExclamationTriangle className="text-amber-500 mt-1 shrink-0" size={24} />
+          <FaExclamationTriangle
+            className="text-amber-500 mt-1 shrink-0"
+            size={24}
+          />
           <div>
-            <h3 className="text-sm font-bold text-amber-800 tracking-tight">Active Campaign Lock</h3>
+            <h3 className="text-sm font-bold text-amber-800 tracking-tight">
+              Active Campaign Lock
+            </h3>
             <p className="text-xs text-amber-700 font-medium mt-1 pr-10">
-              This lead collection is actively being processed by an "Ongoing" campaign. Adding, editing, deleting, or transferring records has been disabled to preserve data integrity and prevent race conditions.
+              This lead collection is actively being processed by an "Ongoing"
+              campaign. Adding, editing, deleting, or transferring records has
+              been disabled to preserve data integrity and prevent race
+              conditions.
             </p>
           </div>
         </div>
@@ -682,7 +734,7 @@ export default function LeadDetailsPage() {
         </button>
       </div>
 
-      {(isLoading || isVerifying) ? (
+      {isLoading || isVerifying ? (
         <div className="bg-white p-20 rounded-[2.5rem] border border-slate-100 flex flex-col items-center justify-center space-y-4 font-sans relative overflow-hidden">
           {/* Animated Gradient Background for Verification */}
           {isVerifying && (
@@ -691,7 +743,9 @@ export default function LeadDetailsPage() {
           <div className="relative z-10 flex flex-col items-center gap-4">
             <FaSpinner className="animate-spin text-indigo-500" size={40} />
             <p className="text-slate-400 font-bold text-xs uppercase tracking-widest font-sans">
-              {isVerifying ? "Verification Engine Active..." : "Syncing Leads..."}
+              {isVerifying
+                ? "Verification Engine Active..."
+                : "Syncing Leads..."}
             </p>
           </div>
         </div>
@@ -881,7 +935,9 @@ export default function LeadDetailsPage() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           disabled={activeCampaign}
-                          onClick={() => !activeCampaign && handleOpenModal(lead)}
+                          onClick={() =>
+                            !activeCampaign && handleOpenModal(lead)
+                          }
                           className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-slate-900 hover:text-white transition-all flex items-center justify-center font-sans shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400"
                           title="Edit Lead"
                         >
@@ -889,7 +945,9 @@ export default function LeadDetailsPage() {
                         </button>
                         <button
                           disabled={activeCampaign}
-                          onClick={() => !activeCampaign && handleDeleteLead(lead.id)}
+                          onClick={() =>
+                            !activeCampaign && handleDeleteLead(lead.id)
+                          }
                           className="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center font-sans shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-50 disabled:hover:text-slate-400"
                           title="Remove Lead"
                         >
@@ -1206,31 +1264,53 @@ export default function LeadDetailsPage() {
             <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg shadow-indigo-100">
               <FaExclamationTriangle size={28} />
             </div>
-            
+
             <div className="text-center space-y-3">
               <h2 className="text-2xl font-bold text-slate-900 font-sans">
-                Ready to Validate?
+                {leadsToVerifyCount === 0
+                  ? "No Leads to Verify"
+                  : "Ready to Validate?"}
               </h2>
               <p className="text-sm text-slate-500 font-medium leading-relaxed font-sans">
-                Please take note: Only leads currently marked as <span className="font-bold text-slate-900 px-1.5 py-0.5 bg-slate-50 rounded italic">Untested</span> will be processed. Additionally, records without at least one valid email address (Business or Decision Maker) will be skipped by the verification engine.
+                {leadsToVerifyCount === 0 ? (
+                  "There are no leads that are untested and have a valid email to test."
+                ) : (
+                  <>
+                    Please take note: Only leads currently marked as{" "}
+                    <span className="font-bold text-slate-900 px-1.5 py-0.5 bg-slate-50 rounded italic">
+                      Untested
+                    </span>{" "}
+                    will be processed. Additionally, records without at least
+                    one valid email address (Business or Decision Maker) will be
+                    skipped by the verification engine.
+                    <br />
+                    <br />
+                    <span className="font-bold text-slate-900">
+                      {leadsToVerifyCount}
+                    </span>{" "}
+                    emails will be verified.
+                  </>
+                )}
               </p>
             </div>
 
             <div className="flex flex-col gap-3 font-sans">
-              <button
-                onClick={() => {
-                  setIsVerifyModalOpen(false);
-                  handleVerifyEmails();
-                }}
-                className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200"
-              >
-                Proceed with Verification
-              </button>
+              {leadsToVerifyCount > 0 && (
+                <button
+                  onClick={() => {
+                    setIsVerifyModalOpen(false);
+                    handleVerifyEmails(leadsToVerifyCount);
+                  }}
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200"
+                >
+                  Proceed with Verification
+                </button>
+              )}
               <button
                 onClick={() => setIsVerifyModalOpen(false)}
                 className="w-full py-4 text-slate-400 font-bold hover:text-slate-700 transition-colors"
               >
-                Cancel Action
+                {leadsToVerifyCount === 0 ? "Close" : "Cancel Action"}
               </button>
             </div>
           </div>

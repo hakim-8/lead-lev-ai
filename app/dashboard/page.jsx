@@ -185,7 +185,7 @@ export default function DashboardHome() {
                 color: "text-emerald-500",
               },
               {
-                label: "Active Campaigns",
+                label: "Launched Campaigns",
                 value: orgData?.campaigns_launched || 0,
                 color: "text-amber-500",
               },

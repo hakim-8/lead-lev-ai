@@ -367,6 +367,14 @@ export default function CampaignSetupWizard() {
         if (leadsError) throw leadsError;
       }
 
+      // Log action
+      await supabase.from("actions").insert({
+        user_id: user?.id,
+        org_id: orgId,
+        action: `launched campaign ${stripTimestamp(campaign?.campaign_name || "")}`,
+        credits_used: 0,
+      });
+
       setLaunchStatus("success");
     } catch (err) {
       console.error("Launch error:", err);

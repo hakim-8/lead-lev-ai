@@ -13,6 +13,7 @@ import {
   FaBuilding,
   FaBriefcase,
   FaUsers,
+  FaSpinner,
 } from "react-icons/fa";
 import {
   Eye,
@@ -92,14 +93,27 @@ export default function SettingsPage() {
   const formatEAT = (dateString) => {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
-    return new Intl.DateTimeFormat("en-US", {
+    const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: "Africa/Nairobi",
-      year: "numeric",
+      day: "2-digit",
       month: "short",
-      day: "numeric",
+      year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-    }).format(date) + " EAT";
+      hour12: true,
+    });
+
+    const parts = formatter.formatToParts(date);
+    const getPart = (type) => parts.find((p) => p.type === type)?.value;
+
+    const day = getPart("day");
+    const month = getPart("month");
+    const year = getPart("year");
+    const hour = getPart("hour");
+    const minute = getPart("minute");
+    const dayPeriod = getPart("dayPeriod")?.toUpperCase();
+
+    return `${day} ${month} ${year}, ${hour}:${minute} ${dayPeriod}`;
   };
 
   async function fetchOrgData() {
@@ -126,19 +140,19 @@ export default function SettingsPage() {
         .from("organizations")
         .update({ business_context: businessContext })
         .eq("org_id", orgId);
-        
+
       if (error) throw error;
-      
+
       triggerMessage("Business context updated successfully.");
-      
+
       // log action
       await supabase.from("actions").insert({
         user_id: userId,
         org_id: orgId,
         action: `updated business context`,
-        credits_used: 0
+        credits_used: 0,
       });
-      
+
       await fetchOrgData();
     } catch (err) {
       triggerMessage(err.message || "Failed to update context", true);
@@ -367,17 +381,17 @@ export default function SettingsPage() {
 
   if (!clerkLoaded || loadingData) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-500 gap-4">
-        <Loader2 className="animate-spin text-indigo-500" size={40} />
-        <p className="text-sm font-semibold tracking-wide uppercase">
-          Syncing email credentials...
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <FaSpinner className="animate-spin text-indigo-400" size={40} />
+        <p className="text-slate-400 font-medium tracking-widest text-xs uppercase">
+          Fetching your settings...
         </p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 px-4 pb-20">
+    <div className="max-w-4xl mx-auto space-y-8 px-4 pb-20">
       {/* Tab Navigation */}
       <div className="flex gap-6 border-b border-slate-200">
         <button
@@ -474,20 +488,36 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Organization Name</span>
-                  <span className="text-sm font-black text-slate-700">{orgData.org_name}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Organization Name
+                  </span>
+                  <span className="text-sm font-black text-slate-700">
+                    {orgData.org_name}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Company Type</span>
-                  <span className="text-sm font-black text-slate-700">{orgData.company_type || "N/A"}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Company Type
+                  </span>
+                  <span className="text-sm font-black text-slate-700">
+                    {orgData.company_type || "N/A"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Employees</span>
-                  <span className="text-sm font-black text-slate-700">{orgData.number_of_employees || "N/A"}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Employees
+                  </span>
+                  <span className="text-sm font-black text-slate-700">
+                    {orgData.number_of_employees || "N/A"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Members</span>
-                  <span className="text-sm font-black text-slate-700">{orgData.members}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Members
+                  </span>
+                  <span className="text-sm font-black text-slate-700">
+                    {orgData.members}
+                  </span>
                 </div>
               </div>
             </div>
@@ -504,16 +534,28 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Type</span>
-                  <span className="text-sm font-black text-slate-700">{orgData.subscription_type || "N/A"}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Type
+                  </span>
+                  <span className="text-sm font-black text-slate-700">
+                    {orgData.subscription_type || "N/A"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-slate-50">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status</span>
-                  <span className="text-sm font-black text-slate-700 capitalize">{orgData.subscription_status || "N/A"}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Status
+                  </span>
+                  <span className="text-sm font-black text-slate-700 capitalize">
+                    {orgData.subscription_status || "N/A"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Ends On</span>
-                  <span className="text-sm font-black text-slate-700">{formatEAT(orgData.subscription_end)}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Ends On
+                  </span>
+                  <span className="text-sm font-black text-slate-700">
+                    {formatEAT(orgData.subscription_end)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -529,11 +571,14 @@ export default function SettingsPage() {
                 Business Context
               </h3>
             </div>
-            
+
             <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex items-start gap-3 text-amber-800 text-xs font-medium">
               <FaExclamationTriangle size={16} className="mt-0.5 shrink-0" />
               <p>
-                <strong>IMPORTANT:</strong> The business context provided below is used by our AI when generating reports and determining the best approach during AI-powered email campaigns. Please ensure it accurately reflects your company's offerings and tone.
+                <strong>IMPORTANT:</strong> The business context provided below
+                is used by our AI when generating reports and determining the
+                best approach during AI-powered email campaigns. Please ensure
+                it accurately reflects your company's offerings and tone.
               </p>
             </div>
 
@@ -543,14 +588,19 @@ export default function SettingsPage() {
               placeholder="Describe your business..."
               className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-medium min-h-[150px] resize-y"
             />
-            
+
             <div className="flex justify-end">
               <button
                 onClick={handleSaveContext}
-                disabled={isSavingContext || businessContext === orgData.business_context}
+                disabled={
+                  isSavingContext ||
+                  businessContext === orgData.business_context
+                }
                 className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-slate-900 transition-all shadow-md disabled:bg-slate-200 disabled:text-slate-400 flex items-center gap-2 uppercase tracking-widest"
               >
-                {isSavingContext && <Loader2 size={14} className="animate-spin" />}
+                {isSavingContext && (
+                  <Loader2 size={14} className="animate-spin" />
+                )}
                 {isSavingContext ? "Saving..." : "Save Context"}
               </button>
             </div>
@@ -560,243 +610,247 @@ export default function SettingsPage() {
 
       {/* Existing Configs List */}
       {activeTab === "emails" && (
-      <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        {configs.map((cfg) => (
-          <div
-            key={cfg.index}
-            className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-200 transition-all group overflow-hidden relative"
-          >
+        <div className="grid grid-cols-1 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {configs.map((cfg) => (
             <div
-              className={`absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[100%] -mr-16 -mt-16 transition-transform group-hover:scale-110 z-0`}
-            />
-
-            <div className="relative z-10 space-y-4">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
-                    <FaEnvelope size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">
-                      {cfg.username}
-                    </h3>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setDeletingIndex(cfg.index);
-                      setDeleteModalError("");
-                      setDeletePassword("");
-                    }}
-                    className="p-2 text-slate-300 hover:text-red-500 transition-colors"
-                    title="Remove Email"
-                  >
-                    <FaTrash size={14} />
-                  </button>
-                  <div className="px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
-                    <ShieldCheck size={12} /> Encrypted
-                  </div>
-                </div>
-              </div>
-
-              {changingIndex === cfg.index ? (
-                <form
-                  onSubmit={handleChangeSubmit}
-                  className="pt-4 border-t border-slate-100 space-y-4 animate-in slide-in-from-top-4 duration-300"
-                >
-                  <div className="grid grid-cols-1 gap-4">
-                    {/* Old Password */}
-                    <div>
-                      <div className="flex justify-between items-center mb-1.5">
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                          Old Password
-                        </label>
-                        <Link
-                          href="/"
-                          className="text-[9px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest"
-                        >
-                          Forgot Password?
-                        </Link>
-                      </div>
-                      <div className="relative">
-                        <input
-                          type={showChangePasswords.old ? "text" : "password"}
-                          value={changePasswords.old}
-                          onChange={(e) =>
-                            setChangePasswords({
-                              ...changePasswords,
-                              old: e.target.value,
-                            })
-                          }
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-medium"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setShowChangePasswords({
-                              ...showChangePasswords,
-                              old: !showChangePasswords.old,
-                            })
-                          }
-                          className="absolute right-3 top-2.5 text-slate-300"
-                        >
-                          {showChangePasswords.old ? (
-                            <EyeOff size={16} />
-                          ) : (
-                            <Eye size={16} />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    {/* New Password */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5">
-                          New Password
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={showChangePasswords.new ? "text" : "password"}
-                            value={changePasswords.new}
-                            onChange={(e) =>
-                              setChangePasswords({
-                                ...changePasswords,
-                                new: e.target.value,
-                              })
-                            }
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-medium"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setShowChangePasswords({
-                                ...showChangePasswords,
-                                new: !showChangePasswords.new,
-                              })
-                            }
-                            className="absolute right-3 top-2.5 text-slate-300"
-                          >
-                            {showChangePasswords.new ? (
-                              <EyeOff size={16} />
-                            ) : (
-                              <Eye size={16} />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5">
-                          Confirm
-                        </label>
-                        <div className="relative">
-                          <input
-                            type={
-                              showChangePasswords.confirm ? "text" : "password"
-                            }
-                            value={changePasswords.confirm}
-                            onChange={(e) =>
-                              setChangePasswords({
-                                ...changePasswords,
-                                confirm: e.target.value,
-                              })
-                            }
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-medium"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setShowChangePasswords({
-                                ...showChangePasswords,
-                                confirm: !showChangePasswords.confirm,
-                              })
-                            }
-                            className="absolute right-3 top-2.5 text-slate-300"
-                          >
-                            {showChangePasswords.confirm ? (
-                              <EyeOff size={16} />
-                            ) : (
-                              <Eye size={16} />
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setChangingIndex(null)}
-                      className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all tracking-widest uppercase"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={isTesting}
-                      className="flex-[2] py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-all tracking-widest uppercase shadow-lg shadow-indigo-50 flex items-center justify-center gap-2"
-                    >
-                      {isTesting ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : null}
-                      {isTesting ? "Verifying..." : "Update & Verify"}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="flex justify-between items-center bg-slate-50/50 p-4 rounded-2xl border border-slate-100/50 group-hover:bg-white transition-colors duration-300">
-                  <div className="flex items-center gap-3 text-slate-500">
-                    <FaLock size={12} />
-                    <span className="text-[11px] font-bold uppercase tracking-tight">
-                      Security Check Required Prior to Reveal
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setChangingIndex(cfg.index)}
-                    className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-indigo-600 hover:border-indigo-200 hover:shadow-md transition-all text-slate-600 shadow-sm"
-                  >
-                    Change Password
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-
-        {hasLegacyPassword && configs.length === 0 && (
-          <div className="bg-indigo-50 border border-indigo-100 p-8 rounded-[2rem] text-center space-y-4 shadow-sm border-dashed">
-            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
-              <ShieldCheck className="text-indigo-600" size={32} />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-indigo-900 font-black uppercase tracking-tight">
-                Migration Required
-              </h3>
-              <p className="text-slate-500 text-sm font-medium">
-                You have a legacy password stored. Please add an email to
-                normalize your settings.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {configs.length === 0 && !hasLegacyPassword && !showAddForm && (
-          <div className="bg-slate-50 border-2 border-dashed border-slate-200 p-16 rounded-[2.5rem] flex flex-col items-center justify-center text-center gap-4">
-            <div className="w-16 h-16 bg-white text-slate-200 rounded-full flex items-center justify-center shadow-sm">
-              <Mail size={32} />
-            </div>
-            <p className="text-slate-400 font-bold text-sm tracking-tight capitalize">
-              No email integrations found for this organization.
-            </p>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="mt-2 flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-xl shadow-indigo-50"
+              key={cfg.index}
+              className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm hover:border-indigo-200 transition-all group overflow-hidden relative"
             >
-              Connect First Email <ArrowRight size={14} />
-            </button>
-          </div>
-        )}
-      </div>
+              <div
+                className={`absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-bl-[100%] -mr-16 -mt-16 transition-transform group-hover:scale-110 z-0`}
+              />
+
+              <div className="relative z-10 space-y-4">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
+                      <FaEnvelope size={20} />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">
+                        {cfg.username}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setDeletingIndex(cfg.index);
+                        setDeleteModalError("");
+                        setDeletePassword("");
+                      }}
+                      className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                      title="Remove Email"
+                    >
+                      <FaTrash size={14} />
+                    </button>
+                    <div className="px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                      <ShieldCheck size={12} /> Encrypted
+                    </div>
+                  </div>
+                </div>
+
+                {changingIndex === cfg.index ? (
+                  <form
+                    onSubmit={handleChangeSubmit}
+                    className="pt-4 border-t border-slate-100 space-y-4 animate-in slide-in-from-top-4 duration-300"
+                  >
+                    <div className="grid grid-cols-1 gap-4">
+                      {/* Old Password */}
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                            Old Password
+                          </label>
+                          <Link
+                            href="/"
+                            className="text-[9px] font-black text-indigo-500 hover:text-indigo-700 uppercase tracking-widest"
+                          >
+                            Forgot Password?
+                          </Link>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={showChangePasswords.old ? "text" : "password"}
+                            value={changePasswords.old}
+                            onChange={(e) =>
+                              setChangePasswords({
+                                ...changePasswords,
+                                old: e.target.value,
+                              })
+                            }
+                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-medium"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowChangePasswords({
+                                ...showChangePasswords,
+                                old: !showChangePasswords.old,
+                              })
+                            }
+                            className="absolute right-3 top-2.5 text-slate-300"
+                          >
+                            {showChangePasswords.old ? (
+                              <EyeOff size={16} />
+                            ) : (
+                              <Eye size={16} />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      {/* New Password */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5">
+                            New Password
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={
+                                showChangePasswords.new ? "text" : "password"
+                              }
+                              value={changePasswords.new}
+                              onChange={(e) =>
+                                setChangePasswords({
+                                  ...changePasswords,
+                                  new: e.target.value,
+                                })
+                              }
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-medium"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setShowChangePasswords({
+                                  ...showChangePasswords,
+                                  new: !showChangePasswords.new,
+                                })
+                              }
+                              className="absolute right-3 top-2.5 text-slate-300"
+                            >
+                              {showChangePasswords.new ? (
+                                <EyeOff size={16} />
+                              ) : (
+                                <Eye size={16} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5">
+                            Confirm
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={
+                                showChangePasswords.confirm
+                                  ? "text"
+                                  : "password"
+                              }
+                              value={changePasswords.confirm}
+                              onChange={(e) =>
+                                setChangePasswords({
+                                  ...changePasswords,
+                                  confirm: e.target.value,
+                                })
+                              }
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 pr-10 text-sm outline-none focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 transition-all font-medium"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setShowChangePasswords({
+                                  ...showChangePasswords,
+                                  confirm: !showChangePasswords.confirm,
+                                })
+                              }
+                              className="absolute right-3 top-2.5 text-slate-300"
+                            >
+                              {showChangePasswords.confirm ? (
+                                <EyeOff size={16} />
+                              ) : (
+                                <Eye size={16} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setChangingIndex(null)}
+                        className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all tracking-widest uppercase"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isTesting}
+                        className="flex-[2] py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-indigo-600 transition-all tracking-widest uppercase shadow-lg shadow-indigo-50 flex items-center justify-center gap-2"
+                      >
+                        {isTesting ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : null}
+                        {isTesting ? "Verifying..." : "Update & Verify"}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="flex justify-between items-center bg-slate-50/50 p-4 rounded-2xl border border-slate-100/50 group-hover:bg-white transition-colors duration-300">
+                    <div className="flex items-center gap-3 text-slate-500">
+                      <FaLock size={12} />
+                      <span className="text-[11px] font-bold uppercase tracking-tight">
+                        Security Check Required Prior to Reveal
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setChangingIndex(cfg.index)}
+                      className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest hover:text-indigo-600 hover:border-indigo-200 hover:shadow-md transition-all text-slate-600 shadow-sm"
+                    >
+                      Change Password
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {hasLegacyPassword && configs.length === 0 && (
+            <div className="bg-indigo-50 border border-indigo-100 p-8 rounded-[2rem] text-center space-y-4 shadow-sm border-dashed">
+              <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm">
+                <ShieldCheck className="text-indigo-600" size={32} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-indigo-900 font-black uppercase tracking-tight">
+                  Migration Required
+                </h3>
+                <p className="text-slate-500 text-sm font-medium">
+                  You have a legacy password stored. Please add an email to
+                  normalize your settings.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {configs.length === 0 && !hasLegacyPassword && !showAddForm && (
+            <div className="bg-slate-50 border-2 border-dashed border-slate-200 p-16 rounded-[2.5rem] flex flex-col items-center justify-center text-center gap-4">
+              <div className="w-16 h-16 bg-white text-slate-200 rounded-full flex items-center justify-center shadow-sm">
+                <Mail size={32} />
+              </div>
+              <p className="text-slate-400 font-bold text-sm tracking-tight capitalize">
+                No email integrations found for this organization.
+              </p>
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="mt-2 flex items-center gap-2 px-8 py-3 bg-slate-900 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-indigo-600 transition-all shadow-xl shadow-indigo-50"
+              >
+                Connect First Email <ArrowRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Add Email Form */}

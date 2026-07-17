@@ -28,6 +28,12 @@ export default function ViewLeadsPage() {
   const [newName, setNewName] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
 
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingTable, setDeletingTable] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [isCheckingRole, setIsCheckingRole] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     fetchLeadTables();
   }, [organization?.id, user?.id]);
@@ -104,6 +110,87 @@ export default function ViewLeadsPage() {
       console.error("Error renaming table:", err);
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const openDeleteModal = async (table) => {
+    setDeletingTable(table);
+    setIsDeleteModalOpen(true);
+    setIsCheckingRole(true);
+    setUserRole(null);
+
+    try {
+      const orgId = organization?.id;
+      const userId = user?.id;
+
+      if (!orgId) {
+        // Personal workspace: user is the implicit admin of their own tables
+        setUserRole("admin");
+      } else {
+        // First try to get the role directly from Clerk's organization membership
+        const clerkRole = organization?.membership?.role;
+        if (clerkRole === "org:admin" || clerkRole === "admin") {
+          setUserRole("admin");
+        } else if (userId) {
+          // Fallback to Supabase query if Clerk role isn't explicitly admin
+          const { data, error } = await supabase
+            .from("memberships")
+            .select("role")
+            .eq("org_id", orgId)
+            .eq("user_id", userId)
+            .single();
+            
+          if (data) {
+            setUserRole(data.role);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching user role:", err);
+    } finally {
+      setIsCheckingRole(false);
+    }
+  };
+
+  const handleDeleteTable = async () => {
+    if (!deletingTable || isDeleting) return;
+    setIsDeleting(true);
+    
+    try {
+      // Delete all leads associated with the table
+      const { error: leadsError } = await supabase
+        .from("leads")
+        .delete()
+        .eq("table_id", deletingTable.id);
+        
+      if (leadsError) throw leadsError;
+
+      // Delete the table itself
+      const { error: tableError } = await supabase
+        .from("lead_tables")
+        .delete()
+        .eq("id", deletingTable.id);
+        
+      if (tableError) throw tableError;
+
+      // Log action
+      const orgId = organization?.id || null;
+      await supabase.from("actions").insert({
+        user_id: user?.id,
+        org_id: orgId,
+        action: `deleted ${stripTimestamp(deletingTable.table_name)} table`,
+        credits_used: 0,
+      });
+
+      // Update state
+      setLeadTables((prev) => prev.filter((t) => t.id !== deletingTable.id));
+      setIsDeleteModalOpen(false);
+      setDeletingTable(null);
+    } catch (err) {
+      console.error("Error deleting table:", err);
+      alert("Failed to delete table. Please try again.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -254,6 +341,12 @@ export default function ViewLeadsPage() {
                     >
                       <FaEdit size={16} />
                     </button>
+                    <button
+                      onClick={() => openDeleteModal(table)}
+                      className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center hover:bg-red-100 transition-all border border-red-100"
+                    >
+                      <FaTrash size={16} />
+                    </button>
                   </div>
                 )}
               </motion.div>
@@ -261,6 +354,69 @@ export default function ViewLeadsPage() {
           </AnimatePresence>
         </div>
       )}
+
+      {/* Delete Modal */}
+      <AnimatePresence>
+        {isDeleteModalOpen && deletingTable && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 font-sans"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-[2rem] w-full max-w-md overflow-hidden shadow-2xl"
+            >
+              <div className="p-8">
+                <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mb-6">
+                  <FaTrash size={32} />
+                </div>
+                
+                <h3 className="text-xl font-black text-slate-900 mb-2">
+                  Delete Table
+                </h3>
+                
+                {isCheckingRole ? (
+                  <div className="flex items-center gap-2 text-slate-500">
+                    <FaSpinner className="animate-spin" /> Checking permissions...
+                  </div>
+                ) : userRole !== "admin" ? (
+                  <p className="text-slate-500 font-medium">
+                    Only admins are allowed to delete tables.
+                  </p>
+                ) : (
+                  <p className="text-slate-500 font-medium leading-relaxed">
+                    Are you sure you want to delete the <span className="font-bold text-slate-800">{stripTimestamp(deletingTable.table_name)}</span> table? This will permanently delete all leads inside this table. This action cannot be undone.
+                  </p>
+                )}
+              </div>
+              
+              <div className="bg-slate-50 p-6 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  disabled={isDeleting}
+                  className="px-6 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all"
+                >
+                  Cancel
+                </button>
+                {!isCheckingRole && userRole === "admin" && (
+                  <button
+                    onClick={handleDeleteTable}
+                    disabled={isDeleting}
+                    className="px-6 py-2.5 bg-red-600 text-white rounded-xl text-xs font-bold hover:bg-red-700 transition-all shadow-md shadow-red-200 flex items-center gap-2"
+                  >
+                    {isDeleting && <FaSpinner className="animate-spin" />}
+                    Confirm Delete
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

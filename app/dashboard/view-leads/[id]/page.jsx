@@ -253,7 +253,7 @@ export default function LeadDetailsPage() {
   const handleBulkTransfer = async () => {
     if (!targetTableId || selectedLeadIds.length === 0) return;
 
-    const destinationTable = availableTables.find((t) => t.id === targetTableId)?.table_name || "another";
+    const destinationTable = availableTables.find((t) => t.id.toString() === targetTableId.toString())?.table_name || "another";
 
     setIsProcessingBulk(true);
     try {
@@ -299,7 +299,7 @@ export default function LeadDetailsPage() {
       await supabase.from("actions").insert({
         user_id: user?.id,
         org_id: organization?.id || null,
-        action: `${selectedLeadIds.length} transferred from ${stripTimestamp(tableName)} to ${stripTimestamp(destinationTable)}`,
+        action: `${selectedLeadIds.length} leads transferred from ${stripTimestamp(tableName)} to ${stripTimestamp(destinationTable)}`,
         credits_used: 0,
       });
 
@@ -467,6 +467,12 @@ export default function LeadDetailsPage() {
         setLeads((prev) => prev.map((l) => (l.id === data.id ? data : l)));
       } else {
         // Add
+        if (leads.length >= 300) {
+          showFeedback("error", "You have hit the maximum number of results for a table (300).");
+          setIsSaving(false);
+          return;
+        }
+
         const { data, error } = await supabase
           .from("leads")
           .insert({

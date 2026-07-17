@@ -272,7 +272,6 @@ export default function CampaignSetupWizard() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            campaign_id: id,
             table_id: selectedTableId,
             name: stripTimestamp(campaign?.campaign_name || ""),
             org_id: orgId,
@@ -361,7 +360,7 @@ export default function CampaignSetupWizard() {
       if (selectedTableId) {
         const { error: leadsError } = await supabase
           .from("leads")
-          .update({ status: "queued", campaign_id: parseInt(id) })
+          .update({ status: "queued" })
           .eq("table_id", selectedTableId);
 
         if (leadsError) throw leadsError;

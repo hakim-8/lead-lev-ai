@@ -3,7 +3,14 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useUser, useOrganization } from "@clerk/nextjs";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaPaperPlane, FaRobot, FaUserCircle, FaSpinner, FaExternalLinkAlt, FaClock } from "react-icons/fa";
+import {
+  FaPaperPlane,
+  FaRobot,
+  FaUserCircle,
+  FaSpinner,
+  FaExternalLinkAlt,
+  FaClock,
+} from "react-icons/fa";
 import { supabase } from "../../lib/supabase";
 import { useScrapeStatus } from "../../../hooks/useScrapeStatus";
 import Link from "next/link";
@@ -56,7 +63,7 @@ export default function LeadGeneratorPage() {
     async function loadMessages() {
       // Only load when both Clerk and Org info are definitive
       if (!(isUserLoaded && isOrgLoaded) || !orgId) return;
-      
+
       console.log("Fetching chat history for org:", orgId);
       const { data, error } = await supabase
         .from("chat_messages")
@@ -70,11 +77,13 @@ export default function LeadGeneratorPage() {
       }
 
       if (data && data.length > 0) {
-        setMessages(data.map(m => ({
-          id: m.id,
-          sender: m.role === 'assistant' ? 'ai' : 'user',
-          text: m.content
-        })));
+        setMessages(
+          data.map((m) => ({
+            id: m.id,
+            sender: m.role === "assistant" ? "ai" : "user",
+            text: m.content,
+          })),
+        );
       } else {
         // Initial Welcome if no history found in DB
         setMessages([
@@ -96,33 +105,38 @@ export default function LeadGeneratorPage() {
   // Handle "Completed" Status Transition
   useEffect(() => {
     // Only fire when status is completed and we haven't processed this specific transition yet
-    if (scrapeStatus === 'completed_leads' && processedStatusRef.current !== 'completed_leads') {
-      const completionText = "Great news! Your leads have been collected and verified. You can access the full list in your dashboard.";
-      
+    if (
+      scrapeStatus === "completed_leads" &&
+      processedStatusRef.current !== "completed_leads"
+    ) {
+      const completionText =
+        "Great news! Your leads have been collected and verified. You can access the full list in your dashboard.";
+
       const aiMsg = {
         id: Date.now().toString(),
         sender: "ai",
         text: completionText,
-        isCompletion: true
+        isCompletion: true,
       };
-      
-      setMessages(prev => {
+
+      setMessages((prev) => {
         // Double check against last message just in case history loaded late
-        if (prev.length > 0 && prev[prev.length - 1].text === completionText) return prev;
+        if (prev.length > 0 && prev[prev.length - 1].text === completionText)
+          return prev;
         return [...prev, aiMsg];
       });
-      
+
       saveMessage("assistant", completionText);
-      processedStatusRef.current = 'completed_leads';
-      
+      processedStatusRef.current = "completed_leads";
+
       // Auto-reset status after a short delay to keep the UI clean
       setTimeout(() => {
         resetStatus();
         processedStatusRef.current = null; // Prepare for next session
       }, 5000);
-    } 
+    }
     // Reset the ref if status changes back to something else (null or active)
-    else if (scrapeStatus !== 'completed_leads' && scrapeStatus !== null) {
+    else if (scrapeStatus !== "completed_leads" && scrapeStatus !== null) {
       processedStatusRef.current = scrapeStatus;
     }
   }, [scrapeStatus, resetStatus]);
@@ -132,10 +146,11 @@ export default function LeadGeneratorPage() {
       console.warn("Save skipped: orgId not yet available");
       return;
     }
-    
+
     // Normalize role to 'user' or 'assistant'
-    const normalizedRole = role === 'ai' ? 'assistant' : (role === 'user' ? 'user' : role);
-    
+    const normalizedRole =
+      role === "ai" ? "assistant" : role === "user" ? "user" : role;
+
     try {
       console.log(`Saving ${normalizedRole} message to DB for org: ${orgId}`);
       const { error } = await supabase.from("chat_messages").insert({
@@ -143,9 +158,9 @@ export default function LeadGeneratorPage() {
         user_id: user?.id,
         role: normalizedRole,
         content: content,
-        type: "lead_generator"
+        type: "lead_generator",
       });
-      
+
       if (error) {
         console.error("Supabase Save Error:", error.message, error.details);
         throw error;
@@ -163,7 +178,7 @@ export default function LeadGeneratorPage() {
 
     const userMessage = inputVal;
     setInputVal("");
-    
+
     // Optimistic Update
     setMessages((prev) => [
       ...prev,
@@ -215,7 +230,7 @@ export default function LeadGeneratorPage() {
           text: aiResponse,
         },
       ]);
-      
+
       // Save AI Response
       await saveMessage("assistant", aiResponse);
     } catch (error) {
@@ -245,7 +260,7 @@ export default function LeadGeneratorPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Lead Generator</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Find niche construction companies and more with AI.
+            Find niche companies and more with AI.
           </p>
         </div>
 
@@ -293,7 +308,7 @@ export default function LeadGeneratorPage() {
                   {msg.text}
                   {msg.isCompletion && (
                     <div className="mt-4">
-                      <Link 
+                      <Link
                         href="/dashboard/view-leads"
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all inline-flex"
                       >
@@ -307,7 +322,8 @@ export default function LeadGeneratorPage() {
           </AnimatePresence>
 
           {/* Real-time Status Loaders */}
-          {(scrapeStatus === 'scraping_leads' || scrapeStatus === 'verifying_leads') && (
+          {(scrapeStatus === "scraping_leads" ||
+            scrapeStatus === "verifying_leads") && (
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -328,19 +344,21 @@ export default function LeadGeneratorPage() {
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
-                      {scrapeStatus === 'scraping_leads' ? (
+                      {scrapeStatus === "scraping_leads" ? (
                         <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 flex items-center gap-2">
-                           Researching Leads
+                          Researching Leads
                         </span>
                       ) : (
                         <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 flex items-center gap-2">
-                           Verifying Data
+                          Verifying Data
                         </span>
                       )}
-                      <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">Live Status</span>
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
+                        Live Status
+                      </span>
                     </div>
                     <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                      {scrapeStatus === 'scraping_leads' 
+                      {scrapeStatus === "scraping_leads"
                         ? "Our AI is currently scouring the web for high-quality leads matching your criteria."
                         : "Leads found! We are now verifying each email to ensure maximum deliverability."}
                     </p>
@@ -371,7 +389,8 @@ export default function LeadGeneratorPage() {
         {/* Input Bar */}
         <div className="p-4 bg-slate-50/50 border-t border-slate-100 mt-auto relative">
           {/* Blocking Overlay for Web Audit (Only on active tasks) */}
-          {(scrapeStatus === 'scraping_web' || scrapeStatus === 'composing_web') && (
+          {(scrapeStatus === "scraping_web" ||
+            scrapeStatus === "composing_web") && (
             <div className="absolute inset-0 z-10 bg-slate-50/80 backdrop-blur-sm flex flex-col items-center justify-center p-4">
               <div className="flex items-center gap-3 px-6 py-3 bg-white border border-slate-200 rounded-2xl shadow-xl">
                 <FaClock className="text-amber-500 animate-pulse" />
@@ -391,13 +410,37 @@ export default function LeadGeneratorPage() {
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isTyping || (scrapeStatus === 'scraping_web' || scrapeStatus === 'composing_web') || (activeRequest && (scrapeStatus === 'scraping_leads' || scrapeStatus === 'verifying_leads'))}
-              placeholder={(scrapeStatus === 'scraping_web' || scrapeStatus === 'composing_web') ? "AI is busy with another task..." : (activeRequest && (scrapeStatus === 'scraping_leads' || scrapeStatus === 'verifying_leads')) ? "AI is searching for leads..." : "e.g. Find me 100 construction companies in Nairobi..."}
+              disabled={
+                isTyping ||
+                scrapeStatus === "scraping_web" ||
+                scrapeStatus === "composing_web" ||
+                (activeRequest &&
+                  (scrapeStatus === "scraping_leads" ||
+                    scrapeStatus === "verifying_leads"))
+              }
+              placeholder={
+                scrapeStatus === "scraping_web" ||
+                scrapeStatus === "composing_web"
+                  ? "AI is busy with another task..."
+                  : activeRequest &&
+                      (scrapeStatus === "scraping_leads" ||
+                        scrapeStatus === "verifying_leads")
+                    ? "AI is searching for leads..."
+                    : "e.g. Find me 100 construction companies in Nairobi..."
+              }
               className="flex-1 px-4 py-2 outline-none text-slate-700 placeholder:text-slate-400 disabled:opacity-50"
             />
             <button
               type="submit"
-              disabled={isTyping || !inputVal.trim() || (scrapeStatus === 'scraping_web' || scrapeStatus === 'composing_web') || (activeRequest && (scrapeStatus === 'scraping_leads' || scrapeStatus === 'verifying_leads'))}
+              disabled={
+                isTyping ||
+                !inputVal.trim() ||
+                scrapeStatus === "scraping_web" ||
+                scrapeStatus === "composing_web" ||
+                (activeRequest &&
+                  (scrapeStatus === "scraping_leads" ||
+                    scrapeStatus === "verifying_leads"))
+              }
               className="w-10 h-10 bg-indigo-600 text-white flex items-center justify-center rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-100"
             >
               <FaPaperPlane size={16} />

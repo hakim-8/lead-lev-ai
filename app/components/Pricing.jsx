@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
-import { FaCheck, FaBolt } from "react-icons/fa";
+import { FaCheck, FaBolt, FaBuilding } from "react-icons/fa";
 
 const TIERS = [
   {
@@ -11,7 +11,7 @@ const TIERS = [
     basePrice: 49,
     baseCredits: 500,
     creditOptions: [500, 1000, 1500, 2500, 4000],
-    extraCreditRate: 0.048, // matches the +500 top-up pack rate
+    extraCreditRate: 0.049, // matches the +500 top-up pack rate
     campaigns: false,
     features: [
       "Lead scraping & enrichment",
@@ -29,7 +29,7 @@ const TIERS = [
     basePrice: 149,
     baseCredits: 3000,
     creditOptions: [3000, 4000, 6000, 8000, 12000],
-    extraCreditRate: 0.0395, // matches the +2,000 top-up pack rate
+    extraCreditRate: 0.0399, // matches the +2,000 top-up pack rate
     campaigns: true,
     campaignDetail: "1 active campaign · 3 inboxes min · up to 2 follow-ups",
     features: [
@@ -47,10 +47,10 @@ const TIERS = [
     name: "Scale",
     description:
       "Full send capacity for teams running multiple campaigns at volume.",
-    basePrice: 229,
+    basePrice: 239,
     baseCredits: 5000,
     creditOptions: [5000, 10000, 15000, 20000, 30000],
-    extraCreditRate: 0.0368, // matches the +5,000 top-up pack rate
+    extraCreditRate: 0.0378, // matches the +5,000 top-up pack rate
     campaigns: true,
     campaignDetail: "2 active campaigns · 5 inboxes · up to 5 follow-ups",
     features: [
@@ -65,6 +65,25 @@ const TIERS = [
     popular: false,
   },
 ];
+
+// Enterprise / custom tier — handled separately from TIERS because it has
+// no fixed price, no credit dropdown, and no formula-driven cost, so it
+// doesn't fit the shared `pricing` calculation used for the other three.
+const CUSTOM_TIER = {
+  name: "Enterprise",
+  description:
+    "For businesses that need full control, scale, and a dedicated environment.",
+  features: [
+    "Everything in Scale",
+    "Custom number of active campaigns",
+    "Custom number of sending inboxes (custom daily send volume)",
+    "Custom number of follow-ups per campaign",
+    "Custom number of team members",
+    "Hyper-priority support",
+    "Privately hosted version of the platform",
+  ],
+  cta: "Contact Sales",
+};
 
 const ANNUAL_MONTHS_CHARGED = 11; // 1 month free when paying annually
 
@@ -145,7 +164,7 @@ export default function Pricing() {
       className="py-24 bg-slate-50 relative border-t border-slate-200"
       id="pricing"
     >
-      <div className="max-w-7xl mx-auto px-6">
+      <div className=" mx-auto px-6">
         <div className="text-center max-w-3xl mx-auto mb-10">
           <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
             Simple, transparent pricing
@@ -192,7 +211,7 @@ export default function Pricing() {
           </span>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-8 items-start">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 items-start">
           {TIERS.map((tier, idx) => {
             const p = pricing[idx];
             return (
@@ -200,7 +219,7 @@ export default function Pricing() {
                 key={tier.name}
                 className={`relative bg-white rounded-3xl p-8 shadow-xl flex flex-col h-full ${
                   tier.popular
-                    ? "border-2 border-indigo-600 shadow-indigo-100 md:scale-105 z-10"
+                    ? "border-2 border-indigo-600 shadow-indigo-100 lg:scale-105 z-10"
                     : "border border-slate-200 shadow-slate-100"
                 }`}
               >
@@ -287,6 +306,67 @@ export default function Pricing() {
               </div>
             );
           })}
+
+          {/* ── Enterprise / Custom card ──────────────────────────────────
+              Deliberately styled darker (slate-900) rather than white like
+              the other three: it has no price number and no dropdown, so a
+              plain white card in the same shape would look like a broken
+              or empty version of the others. The dark surface reads as a
+              distinct "talk to us" tier instead of a missing price. */}
+          <div className="relative bg-slate-900 rounded-3xl p-8 shadow-xl flex flex-col h-full border border-slate-800">
+            <h3 className="text-2xl font-bold text-white mb-2">
+              {CUSTOM_TIER.name}
+            </h3>
+            <p className="text-slate-400 text-sm mb-6 min-h-[40px]">
+              {CUSTOM_TIER.description}
+            </p>
+
+            {/* Credits — static label, no dropdown, kept at the same
+                position as the selector on the other cards so the row
+                heights still line up across the grid. */}
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+              Monthly credits
+            </label>
+            <div className="w-full mb-6 rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-3 text-sm font-semibold text-white">
+              Custom volume
+            </div>
+
+            {/* Price — "Custom" at the same visual weight as a real price
+                so the card doesn't look empty next to the other three. */}
+            <div className="mb-2">
+              <div className="flex items-baseline gap-1">
+                <span className="text-4xl font-extrabold text-white">
+                  Custom
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Tailored to your usage — talk to sales for a quote
+              </p>
+            </div>
+
+            <Link
+              href="/contact"
+              className="w-full block text-center py-4 rounded-full font-semibold transition-all mt-2 bg-white hover:bg-slate-100 text-slate-900"
+            >
+              {CUSTOM_TIER.cta}
+            </Link>
+
+            <div className="mt-6 flex items-start gap-2 bg-indigo-500/10 rounded-xl p-3">
+              <FaBolt className="text-indigo-400 text-xs mt-0.5 shrink-0" />
+              <span className="text-xs text-indigo-300 font-medium">
+                Custom active campaigns · custom inboxes · custom follow-ups
+              </span>
+            </div>
+
+            <div className="mt-8 space-y-4 flex-1">
+              {CUSTOM_TIER.features.map((feature) => (
+                <div key={feature} className="flex items-center gap-3">
+                  <FaCheck className="text-indigo-400 text-sm shrink-0" />
+                  <span className="text-slate-300 text-sm">{feature}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         <p className="text-center text-sm text-slate-500 mt-10">

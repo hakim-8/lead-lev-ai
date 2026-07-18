@@ -8,19 +8,26 @@ html {
 :root {
   --background: #f8fafc; /* slate-50 */
   --foreground: #0f172a; /* slate-900 */
+  --bg-elevated: #ffffff; /* white */
+  --signal: #4f46e5; /* indigo-600 */
+  --found: #f59e0b; /* amber-500 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-signal: var(--signal);
+  --color-found: var(--found);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-heading: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
